@@ -9,12 +9,13 @@ all original art, code, and audio. **Not affiliated with Mojang or Microsoft.**
 |-------|------------|
 | **Theme `minecraft`** | Obsidian palette, XP-green accents, stone GUI greys, Monocraft font, pixel cursor, transparent bar |
 | **HUD (SUPER+H)** | Hotbar, hearts, hunger, XP bar, status icons, bottom-right `[E] inventory` chip |
-| **Inventory (SUPER+E)** | Classic GUI with app launchers in main + hotbar slots |
-| **Steve (SUPER+SHIFT+S)** | Blocky companion, bottom-left; blink + bob; click opens inventory |
+| **Inventory (SUPER+E)** | Classic GUI with app launchers, category-matched craft-row suggestions |
+| **Steve (SUPER+SHIFT+S)** | Blocky companion, bottom-left; blink + bob; click opens inventory (crouches) |
 | **Death power menu (SUPER+SHIFT+D)** | “You Died!” full-screen with Respawn / Title Screen / Log Out / Restart / Shut Down |
 | **Toast** | Advancement-style notifications (auto or `minecraft-toast`) |
 | **Splash (SUPER+SHIFT+X)** | Yellow diagonal splash text; also fires when the theme turns on |
 | **Sounds** | Original procedural click/open/close/toast/death WAVs (CC0) |
+| **Screensaver** | Minecraft-style OMARCHY ASCII art applied while the theme is on; restored on off |
 
 ## Requirements
 
@@ -33,7 +34,10 @@ omarchy theme set minecraft
 ```
 
 Idempotent — safe to re-run. Installs theme files, scripts, sounds, cursor,
-all six Quickshell plugins, and keybinds into `~/.config/hypr/bindings.lua`.
+all six Quickshell plugins, screensaver art, and keybinds into `~/.config/hypr/bindings.lua`.
+
+First time the theme is turned on, a one-time tip appears above the hotbar:
+`SUPER+M to toggle hotbar on/off`.
 
 ## Uninstall
 
@@ -47,7 +51,7 @@ Restores your previous theme (if Minecraft was active), removes plugins/scripts/
 
 | Keys | Action |
 |------|--------|
-| `SUPER+M` | Toggle theme (on: splash + toast; off: restore theme + hide HUD) |
+| `SUPER+M` | Toggle theme (on: HUD preloads + splash + toast + screensaver; off: restore) |
 | `SUPER+H` | Toggle HUD / hotbar |
 | `SUPER+E` | Toggle inventory |
 | `SUPER+SHIFT+S` | Toggle Steve |
