@@ -18,7 +18,7 @@ Item {
   }
 
   property int guiScale: 3
-  property int anchorX: 8
+  property int anchorX: 0
   property int anchorY: 14
   property int cursorX: 0
   property int cursorY: 0
@@ -136,7 +136,7 @@ Item {
         // Flip so Steve points right (scale.x = -1 mirrors the sprite).
         Item {
           id: steveFlip
-          anchors.horizontalCenter: parent.horizontalCenter
+          anchors.left: parent.left
           anchors.top: parent.top
           width: panel.steveW
           height: panel.steveH
@@ -148,12 +148,17 @@ Item {
             id: steveAnim
             anchors.fill: parent
             source: Qt.resolvedUrl("steve.gif")
-            visible: root.hasVideo && status === AnimatedImage.Ready
-            playing: root.opened && root.hasVideo && root.animPlay
+            sourceSize: Qt.size(panel.steveW, panel.steveH)
+            visible: status === AnimatedImage.Ready
+            playing: root.opened && root.animPlay
             fillMode: Image.PreserveAspectFit
             smooth: false
             mipmap: false
             asynchronous: false
+            onStatusChanged: {
+              if (status === AnimatedImage.Ready)
+                root.hasVideo = true
+            }
             onPlayingChanged: {
               if (!playing) {
                 // Restart from the first frame next time the mouse moves.
@@ -171,13 +176,13 @@ Item {
             smooth: false
             mipmap: false
             asynchronous: false
-            visible: !root.hasVideo && status === Image.Ready
+            visible: steveAnim.status !== AnimatedImage.Ready && status === Image.Ready
           }
 
           Canvas {
             id: steveFallback
             anchors.fill: parent
-            visible: !root.hasVideo && steveImg.status !== Image.Ready
+            visible: steveAnim.status !== AnimatedImage.Ready && steveImg.status !== Image.Ready
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()
             Component.onCompleted: requestPaint()

@@ -11,6 +11,89 @@ Item {
   property var manifest: null
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
 
+  // Drop the inventory Overlay while About (a normal window) is open so
+  // About paints in front; restore Overlay when About closes.
+  property bool aboutOpen: false
+  property bool aboutSeen: false
+  function launchAbout() {
+    Quickshell.execDetached(["omarchy-launch-about"])
+    aboutOpen = true
+    aboutSeen = false
+    aboutPoll.restart()
+  }
+  Timer {
+    id: aboutPoll
+    interval: 350
+    repeat: true
+    onTriggered: aboutClients.running = false, aboutClients.running = true
+  }
+  Process {
+    id: aboutClients
+    running: false
+    command: ["hyprctl", "clients", "-j"]
+    stdout: StdioCollector {
+      onTextChanged: {
+        var open = false
+        try {
+          var cs = JSON.parse(text)
+          for (var i = 0; i < cs.length; i++) {
+            if (String(cs[i].class || "") === "org.omarchy.about") { open = true; break }
+          }
+        } catch (e) {}
+        if (open) {
+          root.aboutSeen = true
+          root.aboutOpen = true
+        } else if (root.aboutSeen) {
+          root.aboutOpen = false
+          aboutPoll.stop()
+        }
+        // else: About not mapped yet — keep polling until it appears.
+      }
+    }
+  }
+  onAboutOpenChanged: { if (invCanvas) invCanvas.requestPaint() }
+
+  // Session metrics for armor progression (hours since Hyprland came up,
+  // live window count, installed .desktop count).
+  property int metricHours: 0
+  property int metricWins: 0
+  function refreshMetrics() {
+    hoursProc.running = false
+    hoursProc.running = true
+    winsProc.running = false
+    winsProc.running = true
+  }
+  Process {
+    id: hoursProc
+    running: false
+    command: ["python3", "-c",
+      "import os,glob,time; r=os.environ.get('XDG_RUNTIME_DIR','/run/user/'+str(os.getuid())); d=sorted(glob.glob(r+'/hypr/*')); print(int((time.time()-os.stat(d[0]).st_ctime)//3600) if d else 0)"]
+    stdout: StdioCollector {
+      onTextChanged: {
+        var h = parseInt(String(text).trim(), 10)
+        if (isFinite(h) && h >= 0) {
+          root.metricHours = h
+          if (invCanvas) invCanvas.requestPaint()
+        }
+      }
+    }
+  }
+  Process {
+    id: winsProc
+    running: false
+    command: ["hyprctl", "clients", "-j"]
+    stdout: StdioCollector {
+      onTextChanged: {
+        try {
+          var n = JSON.parse(text).length
+          if (isFinite(n)) {
+            root.metricWins = n
+            if (invCanvas) invCanvas.requestPaint()
+          }
+        } catch (e) {}
+      }
+    }
+  }
   function open(payload) {
     var p = {}
     try {
@@ -27,6 +110,9 @@ Item {
       }
     }
     if (appRefreshTimer) appRefreshTimer.restart()
+    refreshMetrics()
+    // Re-sync hotbar from disk in case HUD/inventory drifted.
+    hotbarFile.reload()
   }
   function close() {
     opened = false
@@ -168,11 +254,7 @@ Item {
         && py >= backChipY && py < backChipY + backChipH
   }
 
-  // About leaf with no children → open Omarchy's official About window.
-  // Keep inventory open so the user returns to it when About closes.
-  function launchAbout() {
-    Quickshell.execDetached(["omarchy-launch-about"])
-  }
+  // (launchAbout lives near the top — opens official About and lowers layer.)
 
   function loadApps() {
     try {
@@ -377,16 +459,23 @@ Item {
     return slots[armorBase + w]
   }
 
-  // Armor material tier from installed .desktop count (progression over time
-  // as apps are installed). Note drawn on the classic inventory panel.
+  // Armor material tier from time on device + live activity + installed apps.
   // Cloth → Wood → Chain → Iron → Diamond.
+  // score = apps + 2×session-hours + 3×open-windows (all three grow with use).
   function armorTier() {
-    var n = appRows.length
-    if (n >= 90) return { name: "Diamond", tone: 4, count: n }
-    if (n >= 65) return { name: "Iron", tone: 3, count: n }
-    if (n >= 40) return { name: "Chain", tone: 2, count: n }
-    if (n >= 20) return { name: "Wood", tone: 1, count: n }
-    return { name: "Cloth", tone: 0, count: n }
+    var apps = appRows.length
+    var hours = Math.max(0, metricHours | 0)
+    var wins = Math.max(0, metricWins | 0)
+    var score = apps + hours * 2 + wins * 3
+    var name = "Cloth", tone = 0
+    if (score >= 220) { name = "Diamond"; tone = 4 }
+    else if (score >= 160) { name = "Iron"; tone = 3 }
+    else if (score >= 100) { name = "Chain"; tone = 2 }
+    else if (score >= 50) { name = "Wood"; tone = 1 }
+    return {
+      name: name, tone: tone, count: apps, score: score,
+      hours: hours, wins: wins
+    }
   }
   // Material palette for armor icons: [main, dark, accent]
   // High contrast against the #8b8b8b slot background.
@@ -1298,7 +1387,9 @@ Item {
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
     WlrLayershell.namespace: "minecraft-inventory"
-    WlrLayershell.layer: WlrLayer.Overlay
+    // Bottom while About is open so the normal About window sits in front;
+    // Overlay otherwise so the panel covers the desktop like before.
+    WlrLayershell.layer: root.aboutOpen ? WlrLayer.Bottom : WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
     exclusionMode: ExclusionMode.Ignore
     mask: Region { item: hitRoot }
@@ -1622,17 +1713,23 @@ Item {
               }
             }
 
-            // Armor progression note (explains tier rule on the panel itself).
-            // Sits in the gap under the top strip / above the main 3×9 grid.
+            // Armor progression note — sits in the grey gap under the right-hand
+            // 2×2 craft wells (before the main 3×9 grid). Driven by apps +
+            // session hours + open windows (see armorTier).
             {
               var at = root.armorTier()
+              var noteY = root.craftY + 2 * root.craftPitch + root.craftSlot + 8
+              var noteX = root.craftX - 8
               ctx.fillStyle = "#404040"
               ctx.font = "bold " + String(5 * s) + "px Monocraft, monospace"
               ctx.textAlign = "left"
               ctx.textBaseline = "top"
               ctx.fillText(
-                "Armor: " + at.name + " · " + at.count + " apps (install more to level up)",
-                root.pad * s, (root.mainY - 6) * s)
+                "Armor: " + at.name + " · " + at.score + " pts",
+                noteX * s, noteY * s)
+              ctx.fillText(
+                at.count + " apps · " + at.hours + "h · " + at.wins + " wins",
+                noteX * s, (noteY + 7) * s)
             }
 
             // Drag ghost follows the cursor
@@ -1770,27 +1867,55 @@ Item {
           }
 
           function drawPlayer(ctx, x, y, s) {
-            // Original stub figure (blue shirt / purple pants) — placeholder for M5 Steve
-            // head 8×8
-            ctx.fillStyle = "#c8a27a"
-            ctx.fillRect(x + 4 * s, y, 8 * s, 8 * s)
+            // Detailed Steve preview — full pixel figure (16×26 units).
+            // head
             ctx.fillStyle = "#3a2a1a"
+            ctx.fillRect(x + 4 * s, y, 8 * s, 8 * s)
+            ctx.fillStyle = "#c8a27a"
+            ctx.fillRect(x + 5 * s, y + 2 * s, 6 * s, 6 * s)
+            // hair fringe
+            ctx.fillStyle = "#3a2a1a"
+            ctx.fillRect(x + 5 * s, y + 2 * s, 6 * s, 1 * s)
             ctx.fillRect(x + 4 * s, y, 8 * s, 2 * s)
-            // eyes
-            ctx.fillStyle = "#3b5dc9"
+            // eyes (white + pupil)
+            ctx.fillStyle = "#ffffff"
             ctx.fillRect(x + 5 * s, y + 4 * s, 2 * s, 2 * s)
             ctx.fillRect(x + 9 * s, y + 4 * s, 2 * s, 2 * s)
-            // body
+            ctx.fillStyle = "#3b5dc9"
+            ctx.fillRect(x + 6 * s, y + 4 * s, 1 * s, 2 * s)
+            ctx.fillRect(x + 9 * s, y + 4 * s, 1 * s, 2 * s)
+            // nose shadow / mouth
+            ctx.fillStyle = "#b88860"
+            ctx.fillRect(x + 7 * s, y + 6 * s, 2 * s, 1 * s)
+            ctx.fillStyle = "#8a6040"
+            ctx.fillRect(x + 6 * s, y + 7 * s, 4 * s, 1 * s)
+            // torso (cyan tee with shading)
             ctx.fillStyle = "#3dafd0"
             ctx.fillRect(x + 4 * s, y + 8 * s, 8 * s, 10 * s)
-            // arms
+            ctx.fillStyle = "#2f9fc4"
+            ctx.fillRect(x + 4 * s, y + 8 * s, 8 * s, 2 * s)
+            ctx.fillRect(x + 4 * s, y + 16 * s, 8 * s, 2 * s)
+            // sleeves
+            ctx.fillStyle = "#3dafd0"
+            ctx.fillRect(x + 4 * s, y + 8 * s, 2 * s, 4 * s)
+            ctx.fillRect(x + 10 * s, y + 8 * s, 2 * s, 4 * s)
+            // arms (skin)
             ctx.fillStyle = "#c8a27a"
-            ctx.fillRect(x + 1 * s, y + 8 * s, 3 * s, 10 * s)
-            ctx.fillRect(x + 12 * s, y + 8 * s, 3 * s, 10 * s)
-            // legs
+            ctx.fillRect(x + 4 * s, y + 12 * s, 2 * s, 6 * s)
+            ctx.fillRect(x + 10 * s, y + 12 * s, 2 * s, 6 * s)
+            ctx.fillStyle = "#b88860"
+            ctx.fillRect(x + 4 * s, y + 16 * s, 2 * s, 2 * s)
+            ctx.fillRect(x + 10 * s, y + 16 * s, 2 * s, 2 * s)
+            // legs (purple jeans with seam)
             ctx.fillStyle = "#4a3fa0"
             ctx.fillRect(x + 4 * s, y + 18 * s, 4 * s, 8 * s)
             ctx.fillRect(x + 8 * s, y + 18 * s, 4 * s, 8 * s)
+            ctx.fillStyle = "#3a3080"
+            ctx.fillRect(x + 7 * s, y + 18 * s, 2 * s, 8 * s)
+            // shoes
+            ctx.fillStyle = "#6b4420"
+            ctx.fillRect(x + 4 * s, y + 24 * s, 4 * s, 2 * s)
+            ctx.fillRect(x + 8 * s, y + 24 * s, 4 * s, 2 * s)
           }
         }
       }

@@ -477,7 +477,8 @@ Item {
   }
   function applyHotbarOrder() {
     try {
-      var o = JSON.parse(text())
+      // Must call text() on the FileView — bare text() is not in scope here.
+      var o = JSON.parse(hotbarOrderFile.text())
       if (!o || !o.order || o.order.length !== 9) return
       var byName = {}
       for (var i = 0; i < slots.length; i++) {
