@@ -11,45 +11,73 @@ mkdir -p "$STATE_DIR"
 FLAG="$STATE_DIR/overlay-active"
 SND_OK() { [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound "$1" || true; }
 
+# Live shell open-state (FLAG files survive shell restarts and desync).
+# call takes (id, method, arg) — arg is required even when unused.
+# Do not use -q here: quiet mode suppresses the response body.
+shell_open() {
+  local out
+  out=$(omarchy-shell shell call "$PLUGIN_ID" status "" 2>/dev/null || true)
+  [ "$out" = "open" ]
+}
+
+# Resync FLAG against the shell before every toggle.
+if [ -f "$FLAG" ] && ! shell_open; then
+  rm -f "$FLAG"
+fi
+
+# Summon with brief retries (plugin registry may still be settling).
+summon_ok() {
+  local id="$1" payload="${2:-{}}" i out
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    out=$(omarchy-shell shell summon "$id" "$payload" 2>/dev/null || true)
+    if [ "$out" = "ok" ]; then return 0; fi
+    sleep 0.15
+  done
+  return 1
+}
+
+do_show() {
+  summon_ok "$PLUGIN_ID" || return 1
+  summon_ok "$STEVE_ID" || true
+  touch "$FLAG"
+  SND_OK open
+}
+
+do_hide() {
+  omarchy-shell -q shell hide "$PLUGIN_ID" || true
+  omarchy-shell -q shell hide "$STEVE_ID" || true
+  rm -f "$FLAG"
+  SND_OK close
+}
+
 case "${1:-toggle}" in
   show)
-    omarchy-shell shell summon "$PLUGIN_ID" '{}'
-    omarchy-shell shell summon "$STEVE_ID" '{}'
-    touch "$FLAG"
-    SND_OK open
+    do_show || { echo "failed to summon HUD"; exit 1; }
     ;;
   hide)
-    omarchy-shell shell hide "$PLUGIN_ID"
-    omarchy-shell shell hide "$STEVE_ID"
-    rm -f "$FLAG"
-    SND_OK close
+    do_hide
     ;;
   toggle)
-    # FLAG drives shell (summon/hide) so keybind cannot invert.
+    # FLAG drives shell (summon/hide) so keybind cannot invert — but only
+    # after shell_open() above has cleared a stale flag from a prior session.
     if [ -f "$FLAG" ]; then
-      omarchy-shell shell hide "$PLUGIN_ID"
-      omarchy-shell shell hide "$STEVE_ID"
-      rm -f "$FLAG"
-      SND_OK close
+      do_hide
     else
-      omarchy-shell shell summon "$PLUGIN_ID" '{}'
-      omarchy-shell shell summon "$STEVE_ID" '{}'
-      touch "$FLAG"
-      SND_OK open
+      do_show || { echo "failed to summon HUD"; exit 1; }
     fi
     ;;
   select)
     # select <0-8> — open/re-summon the HUD with a hotbar slot selected.
     slot="${2:-0}"
     case "$slot" in
-      ''|*[!0-8]*) echo "slot must be 0-8"; exit 1 ;;
+      ''|*[!0-8]) echo "slot must be 0-8"; exit 1 ;;
     esac
-    omarchy-shell shell summon "$PLUGIN_ID" "{\"slot\": $slot}"
-    omarchy-shell shell summon "$STEVE_ID" '{}'
+    summon_ok "$PLUGIN_ID" "{\"slot\": $slot}" || { echo "failed to summon HUD"; exit 1; }
+    summon_ok "$STEVE_ID" || true
     touch "$FLAG"
     ;;
   status)
-    if [ -f "$FLAG" ]; then echo "on"; else echo "off"; fi
+    if shell_open; then echo "on"; elif [ -f "$FLAG" ]; then echo "on"; else echo "off"; fi
     ;;
   *)
     echo "Usage: minecraft-hotbar [toggle|show|hide|status|select <0-8>]"

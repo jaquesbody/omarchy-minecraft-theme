@@ -9,30 +9,52 @@ STATE_DIR="$HOME/.local/state/minecraft-theme"
 mkdir -p "$STATE_DIR"
 FLAG="$STATE_DIR/inventory-active"
 
+# call takes (id, method, arg) — no -q (quiet swallows the response body).
+shell_open() {
+  local out
+  out=$(omarchy-shell shell call "$PLUGIN_ID" status "" 2>/dev/null || true)
+  [ "$out" = "open" ]
+}
+if [ -f "$FLAG" ] && ! shell_open; then
+  rm -f "$FLAG"
+fi
+
+summon_ok() {
+  local i out
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    out=$(omarchy-shell shell summon "$PLUGIN_ID" '{}' 2>/dev/null || true)
+    if [ "$out" = "ok" ]; then return 0; fi
+    sleep 0.15
+  done
+  return 1
+}
+
+SND() { [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound "$1" || true; }
+
 case "${1:-toggle}" in
   show)
-    omarchy-shell shell summon "$PLUGIN_ID" '{}'
+    summon_ok || { echo "failed to summon inventory"; exit 1; }
     touch "$FLAG"
-    [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound open || true
+    SND open
     ;;
   hide)
-    omarchy-shell shell hide "$PLUGIN_ID"
+    omarchy-shell -q shell hide "$PLUGIN_ID" || true
     rm -f "$FLAG"
-    [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound close || true
+    SND close
     ;;
   toggle)
     if [ -f "$FLAG" ]; then
-      omarchy-shell shell hide "$PLUGIN_ID"
+      omarchy-shell -q shell hide "$PLUGIN_ID" || true
       rm -f "$FLAG"
-      [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound close || true
+      SND close
     else
-      omarchy-shell shell summon "$PLUGIN_ID" '{}'
+      summon_ok || { echo "failed to summon inventory"; exit 1; }
       touch "$FLAG"
-      [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound open || true
+      SND open
     fi
     ;;
   status)
-    if [ -f "$FLAG" ]; then echo "on"; else echo "off"; fi
+    if shell_open || [ -f "$FLAG" ]; then echo "on"; else echo "off"; fi
     ;;
   *)
     echo "Usage: minecraft-inventory [toggle|show|hide|status]"

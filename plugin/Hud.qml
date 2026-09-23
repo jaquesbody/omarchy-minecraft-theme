@@ -22,6 +22,8 @@ Item {
     } catch (e) {}
   }
   function close() { opened = false }
+  // IPC probe for toggle scripts (FLAG files desync across shell restarts).
+  function status() { return opened ? "open" : "closed" }
 
   // Whole-number GUI scale so every pixel stays crisp.
   property int guiScale: 2

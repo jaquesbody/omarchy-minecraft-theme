@@ -16,6 +16,8 @@ Item {
     opened = false
     cursorTimer.stop()
   }
+  // IPC probe for toggle scripts (FLAG files desync across shell restarts).
+  function status() { return opened ? "open" : "closed" }
 
   property int guiScale: 3
   property int anchorX: 0

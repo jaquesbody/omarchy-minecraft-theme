@@ -125,6 +125,8 @@ Item {
     dragging = false
     hideTip()
   }
+  // IPC probe for toggle scripts (FLAG files desync across shell restarts).
+  function status() { return opened ? "open" : "closed" }
 
   property int guiScale: 2
   property int hoveredSlot: -1
@@ -1454,7 +1456,7 @@ Item {
       return { x: craftX + cx * craftPitch, y: craftY + cy * craftPitch }
     }
     if (i === resultIdx)
-      return { x: craftResultX, y: craftY + 2 }
+      return { x: craftResultX, y: craftY + 8 }
     if (i >= mainBase && i < mainBase + 27) {
       var mi = i - mainBase
       var mx = mi % cols
@@ -1509,9 +1511,11 @@ Item {
   }
 
   function hitSlot(px, py) {
-    if (selectedTab >= 0) return -1
-    // px, py in base units
-    for (var i = 0; i < slotCount; i++) {
+    // px, py in base units. Hotbar row stays live on every tab so it can
+    // be dragged/launched without leaving the menu view first.
+    var lo = (selectedTab >= 0) ? hotbarBase : 0
+    var hi = (selectedTab >= 0) ? (hotbarBase + 9) : slotCount
+    for (var i = lo; i < hi; i++) {
       var o = slotOrigin(i)
       if (o.x < 0) continue
       var sz = (i === resultIdx || (i >= craftBase && i < craftBase + 4)) ? craftSlot : slot
@@ -1577,7 +1581,7 @@ Item {
           hoverEnabled: true
           z: -1
           onPressed: function(mouse) {
-            if (root.selectedTab >= 0) return
+            // hitSlot already limits to the hotbar row when a tab is open.
             var bx = mouse.x / panel.s
             var by = mouse.y / panel.s
             root.beginDrag(root.hitSlot(bx, by))
@@ -1598,8 +1602,20 @@ Item {
               origin = { x: bx, y: 0 }
             } else if (root.selectedTab >= 0) {
               i = root.hitMenuSlot(bx, by)
-              label = (i >= 0) ? root.menuSlotLabel(i) : ""
-              origin = (i >= 0) ? root.menuSlotOrigin(i) : null
+              if (i >= 0) {
+                label = root.menuSlotLabel(i)
+                origin = root.menuSlotOrigin(i)
+              } else {
+                // Hotbar strip under the menu — hover/drag still works.
+                i = root.hitSlot(bx, by)
+                if (i >= root.hotbarBase && root.slots[i]) {
+                  label = root.slots[i].name || ""
+                  origin = root.slotOrigin(i)
+                } else {
+                  i = -1
+                  origin = null
+                }
+              }
             } else {
               i = root.hitSlot(bx, by)
               if (i >= 0) {
@@ -1652,7 +1668,7 @@ Item {
                 }
                 return
               }
-              return
+              // No menu hit — fall through so the hotbar row still launches.
             }
             var i = root.hitSlot(bx, by)
             if (i >= root.armorBase && i < root.armorBase + 4) {
@@ -1757,9 +1773,10 @@ Item {
             ctx.textAlign = "left"
             ctx.textBaseline = "top"
 
-            // When a tab is selected, draw its menu list instead of classic slots
+            // When a tab is selected, draw its menu list + the live hotbar strip.
             if (root.selectedTab >= 0) {
               drawMenuView(ctx, s)
+              drawHotbarStrip(ctx, s)
               return
             }
 
@@ -1801,9 +1818,10 @@ Item {
             }
             var ro = root.slotOrigin(root.resultIdx)
             drawSlotFrame(ctx, ro.x * s, ro.y * s, root.craftSlot * s, s, false)
-            // Arrow between craft grid and result — must end before craftResultX.
-            // craft col1 ends at craftX+craftPitch+craftSlot=138; result at 154.
-            drawArrow(ctx, (root.craftX + 30) * s, (root.craftY + 8) * s, s)
+            // Arrow between craft grid and result — vertically centered on
+            // the 2×2 block (block center = craftY+14; arrow visual center
+            // is y+1, so y = craftY+13). Ends before craftResultX.
+            drawArrow(ctx, (root.craftX + 30) * s, (root.craftY + 13) * s, s)
 
             // Main 3×9
             for (var m = 0; m < 27; m++) {
@@ -1878,6 +1896,57 @@ Item {
             }
 
             // Drag ghost follows the cursor
+            if (root.dragging && root.dragFrom >= 0) {
+              var dit = root.slots[root.dragFrom]
+              if (dit && dit.rows) {
+                ctx.globalAlpha = 0.85
+                var diw = dit.rows[0].length
+                var dih = dit.rows.length
+                root.paintGrid(ctx,
+                  Math.round((root.dragX - diw / 2) * s),
+                  Math.round((root.dragY - dih / 2) * s),
+                  s, dit.rows, dit.colors)
+                ctx.globalAlpha = 1.0
+              }
+            }
+          }
+
+          function drawHotbarStrip(ctx, s) {
+            // Hotbar strip bg
+            ctx.fillStyle = "#8b8b8b"
+            ctx.fillRect((root.pad - 1) * s, (root.hotbarY - 1) * s,
+                         (root.cols * root.pitch + 2) * s, (root.slot + 2) * s)
+            for (var h = 0; h < 9; h++) {
+              var ho = root.slotOrigin(root.hotbarBase + h)
+              drawSlotFrame(ctx, ho.x * s, ho.y * s, root.slot * s, s, false)
+            }
+            for (var i = root.hotbarBase; i < root.hotbarBase + 9; i++) {
+              var it = root.slotDisplayItem(i)
+              var o = root.slotOrigin(i)
+              if (o.x < 0 || root.dragFrom === i) continue
+              if (i === root.hoveredSlot) {
+                ctx.fillStyle = "rgba(255, 255, 255, 0.35)"
+                ctx.fillRect(o.x * s, o.y * s, root.slot * s, root.slot * s)
+              }
+              if (!it) continue
+              if (it.rows) {
+                var iw = it.rows[0].length
+                var ih = it.rows.length
+                root.paintGrid(ctx,
+                  (o.x + Math.floor((root.slot - iw) / 2)) * s,
+                  (o.y + Math.floor((root.slot - ih) / 2)) * s,
+                  s, it.rows, it.colors)
+              } else if (it.name) {
+                ctx.fillStyle = "#e8e8f0"
+                ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
+                ctx.textAlign = "center"
+                ctx.textBaseline = "middle"
+                ctx.fillText(it.name.charAt(0).toUpperCase(), (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
+                ctx.textAlign = "left"
+                ctx.textBaseline = "top"
+              }
+            }
+            // Drag ghost (so reordering is visible while a tab is open)
             if (root.dragging && root.dragFrom >= 0) {
               var dit = root.slots[root.dragFrom]
               if (dit && dit.rows) {
