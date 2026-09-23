@@ -8,10 +8,10 @@ Item {
 
   property bool opened: false
   property int clickCount: 0
-  // Herobrine easter egg: after 10 clicks the idle Steve turns eerie for a few seconds.
+  // Herobrine: real Steve texture stays up; white eyes/smile/glow overlay on top.
   property bool herobrine: false
   onHerobrineChanged: {
-    steveFallback.requestPaint()
+    herobrineOverlay.requestPaint()
     if (herobrine) herobrineTimer.restart()
   }
 
@@ -26,16 +26,16 @@ Item {
     herobrine = false
     herobrineTimer.stop()
   }
-  // IPC probe for toggle scripts (FLAG files desync across shell restarts).
   function status() { return opened ? "open" : "closed" }
 
-  // Stationary Steve with big white eyes + evil grin + white glow.
+  // 10 clicks → stationary Herobrine for 5s (texture + white eyes/smile/glow).
   function onSteveClick() {
     clickCount++
     if (clickCount >= 10 && !herobrine) {
       clickCount = 0
       herobrine = true
       animPlay = false
+      try { steveAnim.currentFrame = 0 } catch (e) {}
       Quickshell.execDetached([
         Quickshell.env("HOME") + "/.local/bin/minecraft-toast",
         "Herobrine",
@@ -55,7 +55,6 @@ Item {
   property int cursorX: 0
   property int cursorY: 0
   property bool blinking: false
-  // Play the walk-cycle only while the mouse has moved recently.
   property bool animPlay: false
   property int lastAnimX: -1
   property int lastAnimY: -1
@@ -88,8 +87,10 @@ Item {
           if (nx !== root.lastAnimX || ny !== root.lastAnimY) {
             root.lastAnimX = nx
             root.lastAnimY = ny
-            root.animPlay = true
-            animIdle.restart()
+            if (!root.herobrine) {
+              root.animPlay = true
+              animIdle.restart()
+            }
           }
         }
       }
@@ -99,14 +100,14 @@ Item {
   Timer {
     id: animIdle
     interval: 700
-    onTriggered: root.animPlay = false
+    onTriggered: { if (!root.herobrine) root.animPlay = false }
   }
 
   Timer {
     id: blinkTimer
     interval: 3200
     repeat: true
-    running: root.opened
+    running: root.opened && !root.herobrine
     onTriggered: {
       root.blinking = true
       blinkOff.start()
@@ -117,8 +118,7 @@ Item {
     interval: 140
     onTriggered: root.blinking = false
   }
-  // Optional clip: drop steve.gif (ping-pong walk, green removed) into the
-  // plugin dir. Plays only while the mouse cursor is moving.
+
   property bool hasVideo: false
   FileView {
     id: videoProbe
@@ -168,7 +168,6 @@ Item {
           }
         }
 
-        // Unmirrored: source frames face/walk toward the right.
         Item {
           id: steveFlip
           anchors.horizontalCenter: parent.horizontalCenter
@@ -176,14 +175,13 @@ Item {
           width: panel.steveW
           height: panel.steveH
 
-          // Ping-pong walk cycle (green screen removed). Plays only while
-          // the cursor moves; freezes on frame 0 when idle. Hidden for Herobrine.
+          // Real texture — stays visible for Herobrine (frozen frame 0).
           AnimatedImage {
             id: steveAnim
             anchors.fill: parent
             source: Qt.resolvedUrl("steve.gif")
             sourceSize: Qt.size(panel.steveW, panel.steveH)
-            visible: !root.herobrine && status === AnimatedImage.Ready
+            visible: status === AnimatedImage.Ready
             playing: root.opened && root.animPlay && !root.herobrine
             fillMode: Image.PreserveAspectFit
             smooth: false
@@ -195,7 +193,6 @@ Item {
             }
             onPlayingChanged: {
               if (!playing) {
-                // Restart from the first frame next time the mouse moves.
                 try { steveAnim.currentFrame = 0 } catch (e) {}
               }
             }
@@ -210,33 +207,62 @@ Item {
             smooth: false
             mipmap: false
             asynchronous: false
-            visible: !root.herobrine && steveAnim.status !== AnimatedImage.Ready && status === Image.Ready
+            visible: steveAnim.status !== AnimatedImage.Ready && status === Image.Ready
           }
 
-          // White glow behind Herobrine (drawn under the figure).
+          // Faint white glow behind the figure (Herobrine only).
           Rectangle {
             id: herobrineGlow
             visible: root.herobrine
             anchors.fill: parent
-            anchors.margins: -6 * panel.s
-            color: "#40ffffff"
-            radius: 4 * panel.s
+            anchors.margins: -8 * panel.s
+            color: "#28ffffff"
+            radius: 6 * panel.s
             z: -1
           }
           Rectangle {
             id: herobrineGlow2
             visible: root.herobrine
             anchors.fill: parent
-            anchors.margins: -2 * panel.s
-            color: "#a0ffffff"
-            radius: 2 * panel.s
+            anchors.margins: -3 * panel.s
+            color: "#50ffffff"
+            radius: 3 * panel.s
             z: -1
           }
 
+          // White eyes + evil smile painted over the real texture.
+          Canvas {
+            id: herobrineOverlay
+            anchors.fill: parent
+            visible: root.herobrine
+            z: 10
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+            onPaint: {
+              var ctx = getContext("2d")
+              ctx.clearRect(0, 0, width, height)
+              if (!root.herobrine || width <= 0 || height <= 0) return
+              // Source texture is 48×59; item matches aspect (PreserveAspectFit).
+              var sx = width / 48
+              var sy = height / 59
+              // Big white eye blocks over Steve's eyes (source-pixel coords).
+              ctx.fillStyle = "#ffffff"
+              // left eye
+              ctx.fillRect(20 * sx, 7 * sy, 6 * sx, 5 * sy)
+              // right eye
+              ctx.fillRect(25 * sx, 6 * sy, 6 * sx, 5 * sy)
+              // Evil white smile — wide grin with upturned corners.
+              ctx.fillRect(20 * sx, 14 * sy, 11 * sx, 2 * sy)
+              ctx.fillRect(19 * sx, 13 * sy, 2 * sx, 2 * sy)
+              ctx.fillRect(30 * sx, 13 * sy, 2 * sx, 2 * sy)
+            }
+          }
+
+          // Fallback only if neither texture loads.
           Canvas {
             id: steveFallback
             anchors.fill: parent
-            visible: root.herobrine || (steveAnim.status !== AnimatedImage.Ready && steveImg.status !== Image.Ready)
+            visible: steveAnim.status !== AnimatedImage.Ready && steveImg.status !== Image.Ready
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()
             Component.onCompleted: requestPaint()
@@ -245,12 +271,8 @@ Item {
               ctx.clearRect(0, 0, width, height)
               if (width <= 0 || height <= 0) return
               var s = Math.max(1, Math.floor(width / 14))
-              if (root.herobrine) {
-                root.paintGrid(ctx, 0, 0, s, root.gridHerobrine, root.steveMap)
-              } else {
-                var rows = root.blinking ? root.gridBlink : root.gridOpen
-                root.paintGrid(ctx, 0, 0, s, rows, root.steveMap)
-              }
+              var rows = root.blinking ? root.gridBlink : root.gridOpen
+              root.paintGrid(ctx, 0, 0, s, rows, root.steveMap)
             }
           }
         }
@@ -317,30 +339,6 @@ Item {
     ".hssssssssssh.",
     ".hsssnnnnsssh.",
     ".hssssMMssssh.",
-    ".hssssssssssh.",
-    ".bbssssssssbb.",
-    ".bbMMMMMMMMbb.",
-    ".bbMMMMMMMMbb.",
-    ".bbMMMMMMMMbb.",
-    ".bbMMMMMMMMbb.",
-    "..bAAAAAAAAb..",
-    "..pppppppppp..",
-    "..pppppppppp..",
-    "..pppppppppp.."
-  ]
-
-  // Herobrine: same body as idle Steve, but giant white eyes + evil grin.
-  readonly property var gridHerobrine: [
-    "....hhhhhh....",
-    "...hhhhhhhh...",
-    "..hhhhhhhhhh..",
-    "..hhsssssshh..",
-    ".hssssssssssh.",
-    ".hsEEEEEEEEsh.",
-    ".hsEEEEEEEEsh.",
-    ".hssssssssssh.",
-    ".hsssnnnnsssh.",
-    ".hsMMssssMMsh.",
     ".hssssssssssh.",
     ".bbssssssssbb.",
     ".bbMMMMMMMMbb.",
