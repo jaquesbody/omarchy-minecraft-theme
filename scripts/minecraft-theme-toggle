@@ -20,8 +20,8 @@ USER_SHELL_TOML="$HOME/.config/omarchy/shell.toml"
 BIN_MCSPLASH="$HOME/.local/bin/minecraft-splash"
 BIN_MCTOAST="$HOME/.local/bin/minecraft-toast"
 BIN_MCHOTBAR="$HOME/.local/bin/minecraft-hotbar"
+BIN_MCSS="$HOME/.local/bin/minecraft-screensaver-swap"
 CONFIG_DIR="$HOME/.config/minecraft_theme"
-SCREENSAVER_MC="$CONFIG_DIR/screensaver-mc.txt"
 SCREENSAVER_USER="$HOME/.config/omarchy/branding/screensaver.txt"
 SCREENSAVER_PREV="$STATE_DIR/screensaver-prev.txt"
 mkdir -p "$STATE_DIR" "$CONFIG_DIR"
@@ -132,7 +132,8 @@ if [ "$current" = "$THEME_NAME" ]; then
   if [ -f "$STATE_DIR/overlay-active" ]; then
     "$BIN_MCHOTBAR" hide || true
   fi
-  # Restore previous screensaver branding (undo Minecraft easter egg).
+  # Stop the screensaver logo swap + restore previous branding.
+  if [ -x "$BIN_MCSS" ]; then "$BIN_MCSS" stop || true; fi
   if [ -f "$SCREENSAVER_PREV" ]; then
     cp "$SCREENSAVER_PREV" "$SCREENSAVER_USER" 2>/dev/null || true
   fi
@@ -160,11 +161,11 @@ else
       "$BIN_MCHOTBAR" show "SUPER+M to toggle hotbar on/off" || true
     fi
   fi
-  # Minecraft-style Omarchy screensaver branding (backup original once).
-  if [ -f "$SCREENSAVER_MC" ]; then
+  # Alternate hybrid screensaver logos (backup original once).
+  if [ -x "$BIN_MCSS" ] && [ -f "$CONFIG_DIR/screensaver-a.txt" ] && [ -f "$CONFIG_DIR/screensaver-b.txt" ]; then
     if [ ! -f "$SCREENSAVER_PREV" ] && [ -f "$SCREENSAVER_USER" ]; then
       cp "$SCREENSAVER_USER" "$SCREENSAVER_PREV" 2>/dev/null || true
     fi
-    cp "$SCREENSAVER_MC" "$SCREENSAVER_USER" 2>/dev/null || true
+    "$BIN_MCSS" start || true
   fi
 fi

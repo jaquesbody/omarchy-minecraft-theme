@@ -1,0 +1,63 @@
+#!/bin/bash
+# Alternate the Omarchy screensaver branding between two hybrid logos
+# while the Minecraft theme is on. start = fork flip loop; stop = kill it.
+set -euo pipefail
+
+CONFIG_DIR="$HOME/.config/minecraft_theme"
+STATE_DIR="$HOME/.local/state/minecraft-theme"
+USER_SS="$HOME/.config/omarchy/branding/screensaver.txt"
+A="$CONFIG_DIR/screensaver-a.txt"
+B="$CONFIG_DIR/screensaver-b.txt"
+PIDFILE="$STATE_DIR/screensaver-swap.pid"
+LOOP="$STATE_DIR/screensaver-swap-loop.sh"
+mkdir -p "$STATE_DIR"
+
+stop_swap() {
+  if [ -f "$PIDFILE" ]; then
+    kill "$(cat "$PIDFILE")" 2>/dev/null || true
+    rm -f "$PIDFILE"
+  fi
+  # Kill any leftover flip loops by their unique script path.
+  pkill -f "$LOOP" 2>/dev/null || true
+}
+
+case "${1:-start}" in
+  stop)
+    stop_swap
+    exit 0
+    ;;
+  start)
+    ;;
+  *)
+    echo "Usage: minecraft-screensaver-swap [start|stop]" >&2
+    exit 1
+    ;;
+esac
+
+[ -f "$A" ] && [ -f "$B" ] || exit 0
+stop_swap
+
+# Write the flip loop to a real file (avoids nested-quote fragility).
+cat >"$LOOP" <<EOF
+#!/bin/bash
+A="$A"
+B="$B"
+USER_SS="$USER_SS"
+flip=0
+while true; do
+  if [ "\$flip" -eq 0 ]; then
+    cp "\$A" "\$USER_SS" 2>/dev/null || true
+  else
+    cp "\$B" "\$USER_SS" 2>/dev/null || true
+  fi
+  flip=\$((1 - flip))
+  sleep 12
+done
+EOF
+chmod +x "$LOOP"
+
+# Immediate first paint so theme-ON doesn't wait 12s for art.
+cp "$A" "$USER_SS" 2>/dev/null || true
+
+nohup bash "$LOOP" >/dev/null 2>&1 &
+echo $! >"$PIDFILE"

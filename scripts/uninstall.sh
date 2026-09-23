@@ -29,11 +29,21 @@ fi
 echo "  -> removing theme dir"
 rm -rf "$THEME_DIR"
 
+# Stop swap + restore original screensaver branding before state is deleted.
+[ -x "$BIN_DIR/minecraft-screensaver-swap" ] && \
+  "$BIN_DIR/minecraft-screensaver-swap" stop 2>/dev/null || true
+if [ -f "$STATE_DIR/screensaver-prev.txt" ]; then
+  echo "  -> restoring screensaver branding"
+  cp "$STATE_DIR/screensaver-prev.txt" \
+     "$HOME/.config/omarchy/branding/screensaver.txt" 2>/dev/null || true
+fi
+
 echo "  -> removing scripts"
 rm -f "$BIN_DIR/minecraft-theme-toggle" "$BIN_DIR/minecraft-hotbar" \
       "$BIN_DIR/minecraft-inventory" "$BIN_DIR/minecraft-steve" \
       "$BIN_DIR/minecraft-death" "$BIN_DIR/minecraft-toast" \
-      "$BIN_DIR/minecraft-splash" "$BIN_DIR/minecraft-sound"
+      "$BIN_DIR/minecraft-splash" "$BIN_DIR/minecraft-sound" \
+      "$BIN_DIR/minecraft-screensaver-swap"
 
 echo "  -> removing sounds"
 rm -rf "$HOME/.local/share/minecraft-theme"

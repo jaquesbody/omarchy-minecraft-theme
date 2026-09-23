@@ -29,7 +29,8 @@ done
 echo "  -> scripts: $BIN_DIR"
 mkdir -p "$BIN_DIR"
 for s in minecraft-theme-toggle minecraft-hotbar minecraft-inventory minecraft-steve \
-         minecraft-death minecraft-toast minecraft-splash minecraft-sound; do
+         minecraft-death minecraft-toast minecraft-splash minecraft-sound \
+         minecraft-screensaver-swap; do
   [ -f "$SCRIPT_DIR/$s" ] && cp "$SCRIPT_DIR/$s" "$BIN_DIR/"
 done
 chmod +x "$BIN_DIR"/minecraft-* 2>/dev/null || true
@@ -54,9 +55,10 @@ fi
 echo "  -> config: $CONFIG_DIR"
 mkdir -p "$CONFIG_DIR"
 [ -f "$CONFIG_DIR/hotbar.json" ] || echo '{}' > "$CONFIG_DIR/hotbar.json"
-# Minecraft screensaver branding (applied on theme-ON by minecraft-theme-toggle)
-[ -f "$REPO_DIR/assets/screensaver-mc.txt" ] && \
-  cp "$REPO_DIR/assets/screensaver-mc.txt" "$CONFIG_DIR/screensaver-mc.txt"
+# Hybrid screensaver logos (swapped by minecraft-screensaver-swap while theme ON)
+for f in screensaver-a.txt screensaver-b.txt; do
+  [ -f "$REPO_DIR/assets/$f" ] && cp "$REPO_DIR/assets/$f" "$CONFIG_DIR/$f"
+done
 
 # 4b. Quickshell plugins (HUD + inventory)
 enable_plugin() {

@@ -8,8 +8,9 @@ Item {
 
   property bool opened: false
   property int clickCount: 0
-  property bool herobrine: false
-  onHerobrineChanged: steveFallback.requestPaint()
+  property bool greeting: false
+  property string greetingText: ""
+  onGreetingChanged: steveFallback.requestPaint()
 
   function open(payload) {
     opened = true
@@ -19,28 +20,59 @@ Item {
   function close() {
     opened = false
     cursorTimer.stop()
+    greeting = false
+    greetingTimer.stop()
   }
   // IPC probe for toggle scripts (FLAG files desync across shell restarts).
   function status() { return opened ? "open" : "closed" }
 
-  // Herobrine: after 10 Steve summons, eyes go red for a moment.
+  // Human Steve: every click is a small hop; after 10 he waves and chats.
+  readonly property var greetings: [
+    "Howdy!",
+    "Nice day for mining.",
+    "Watch out for creepers.",
+    "Got any diamonds?",
+    "Want to build something?",
+    "The cows seem happy today.",
+    "I mined diamonds once. Lost them to lava.",
+    "Hi there, neighbor."
+  ]
   function onSteveClick() {
+    hopAnim.restart()
     clickCount++
-    if (clickCount >= 10 && !herobrine) {
-      herobrine = true
+    if (clickCount >= 10 && !greeting) {
       clickCount = 0
-      herobrineTimer.restart()
+      greetingText = greetings[Math.floor(Math.random() * greetings.length)]
+      greeting = true
+      greetingTimer.restart()
       Quickshell.execDetached([
         Quickshell.env("HOME") + "/.local/bin/minecraft-toast",
-        "Herobrine",
-        "He was watching..."
+        "Steve",
+        greetingText
       ])
     }
   }
   Timer {
-    id: herobrineTimer
-    interval: 4000
-    onTriggered: root.herobrine = false
+    id: greetingTimer
+    interval: 3500
+    onTriggered: root.greeting = false
+  }
+  SequentialAnimation {
+    id: hopAnim
+    NumberAnimation {
+      target: steveFlip
+      property: "scale"
+      to: 1.08
+      duration: 90
+      easing.type: Easing.OutQuad
+    }
+    NumberAnimation {
+      target: steveFlip
+      property: "scale"
+      to: 1.0
+      duration: 120
+      easing.type: Easing.InQuad
+    }
   }
 
   property int guiScale: 3
@@ -172,13 +204,12 @@ Item {
 
           // Ping-pong walk cycle (green screen removed). Plays only while
           // the cursor moves; freezes on frame 0 when idle.
-          // Hidden during Herobrine so the red-eye fallback canvas shows.
           AnimatedImage {
             id: steveAnim
             anchors.fill: parent
             source: Qt.resolvedUrl("steve.gif")
             sourceSize: Qt.size(panel.steveW, panel.steveH)
-            visible: !root.herobrine && status === AnimatedImage.Ready
+            visible: status === AnimatedImage.Ready
             playing: root.opened && root.animPlay
             fillMode: Image.PreserveAspectFit
             smooth: false
@@ -205,13 +236,13 @@ Item {
             smooth: false
             mipmap: false
             asynchronous: false
-            visible: !root.herobrine && steveAnim.status !== AnimatedImage.Ready && status === Image.Ready
+            visible: steveAnim.status !== AnimatedImage.Ready && status === Image.Ready
           }
 
           Canvas {
             id: steveFallback
             anchors.fill: parent
-            visible: root.herobrine || (steveAnim.status !== AnimatedImage.Ready && steveImg.status !== Image.Ready)
+            visible: steveAnim.status !== AnimatedImage.Ready && steveImg.status !== Image.Ready
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()
             Component.onCompleted: requestPaint()
@@ -221,15 +252,56 @@ Item {
               if (width <= 0 || height <= 0) return
               var s = Math.max(1, Math.floor(width / 14))
               var rows = root.blinking ? root.gridBlink : root.gridOpen
-              var map = {}
-              var srcMap = root.steveMap
-              for (var mk in srcMap) map[mk] = srcMap[mk]
-              if (root.herobrine) {
-                map["E"] = "#ff2020"
-                map["i"] = "#400000"
-              }
-              root.paintGrid(ctx, 0, 0, s, rows, map)
+              root.paintGrid(ctx, 0, 0, s, rows, root.steveMap)
             }
+          }
+        }
+
+        // Human greeting bubble (after 10 clicks — waves + chats).
+        Rectangle {
+          id: greetBubble
+          visible: root.greeting
+          color: "#ffffff"
+          border.color: "#202020"
+          border.width: Math.max(1, Math.floor(panel.s / 2))
+          radius: 3 * panel.s
+          width: greetText.implicitWidth + 8 * panel.s
+          height: greetText.implicitHeight + 6 * panel.s
+          anchors.horizontalCenter: steveFlip.horizontalCenter
+          anchors.bottom: steveFlip.top
+          anchors.bottomMargin: 4 * panel.s
+
+          Text {
+            id: greetText
+            anchors.centerIn: parent
+            text: root.greetingText
+            color: "#202020"
+            font { family: "Monocraft"; pixelSize: 4 * panel.s }
+          }
+        }
+
+        // Speech-tail under the bubble.
+        Canvas {
+          id: greetTail
+          visible: root.greeting
+          width: 8 * panel.s
+          height: 6 * panel.s
+          anchors.horizontalCenter: steveFlip.horizontalCenter
+          anchors.bottom: steveFlip.top
+          anchors.bottomMargin: 1 * panel.s
+          onPaint: {
+            var ctx = getContext("2d")
+            ctx.clearRect(0, 0, width, height)
+            ctx.fillStyle = "#ffffff"
+            ctx.beginPath()
+            ctx.moveTo(0, 0)
+            ctx.lineTo(width, 0)
+            ctx.lineTo(width / 2, height)
+            ctx.closePath()
+            ctx.fill()
+            ctx.strokeStyle = "#202020"
+            ctx.lineWidth = Math.max(1, panel.s / 2)
+            ctx.stroke()
           }
         }
 

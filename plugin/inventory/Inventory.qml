@@ -711,21 +711,21 @@ Item {
   }
 
   // Armor material tier from time on device + live activity + installed apps.
-  // Cloth → Wood → Chain → Iron → Diamond → Netherite.
+  // Leather → Chainmail → Copper → Iron → Diamond → Netherite.
   // score = apps + 2×session-hours + 3×open-windows (all three grow with use).
-  // Thresholds: Wood 50, Chain 100, Iron 160, Diamond 220, Netherite 300.
+  // Thresholds: Chainmail 50, Copper 100, Iron 160, Diamond 220, Netherite 300.
   // Metrics refresh on open() + appRefreshTimer so tiers move over time.
   function armorTier() {
     var apps = appRows.length
     var hours = Math.max(0, metricHours | 0)
     var wins = Math.max(0, metricWins | 0)
     var score = apps + hours * 2 + wins * 3
-    var name = "Cloth", tone = 0
+    var name = "Leather", tone = 0
     if (score >= 300) { name = "Netherite"; tone = 5 }
     else if (score >= 220) { name = "Diamond"; tone = 4 }
     else if (score >= 160) { name = "Iron"; tone = 3 }
-    else if (score >= 100) { name = "Chain"; tone = 2 }
-    else if (score >= 50) { name = "Wood"; tone = 1 }
+    else if (score >= 100) { name = "Copper"; tone = 2 }
+    else if (score >= 50) { name = "Chainmail"; tone = 1 }
     return {
       name: name, tone: tone, count: apps, score: score,
       hours: hours, wins: wins
@@ -782,18 +782,16 @@ Item {
   // Material palette for armor icons: [main, dark, accent]
   // High contrast against the #8b8b8b slot background.
   readonly property var armorTierPalettes: [
-    ["#8ecff0", "#5a9ec9", "#4a3fa0"], // Cloth (unused — tone 0 keeps Steve maps)
-    ["#8b5a2b", "#6b4420", "#5a3a1a"], // Wood
-    ["#5f6f8a", "#3d4a60", "#4a5870"], // Chain (steel blue-gray)
+    ["#9a6b42", "#7a4e2a", "#5a3a1a"], // Leather
+    ["#5f6f8a", "#3d4a60", "#4a5870"], // Chainmail (steel blue-gray)
+    ["#c87d4a", "#8f4e2a", "#e8a06a"], // Copper
     ["#e8e8e8", "#909090", "#b8b8b8"], // Iron
     ["#5decd7", "#1f8f82", "#3ab8a8"], // Diamond
     ["#3d3540", "#1a151c", "#2a2230"]  // Netherite (dark purple-gray)
   ]
   // Recolor a clothing grid's map for the current armor tier.
-  // Cloth (tone 0) returns the map unchanged — Steve's clothes as authored.
   function armorPaletteFor(map) {
     var tone = armorTier().tone
-    if (tone === 0) return map
     var pal = armorTierPalettes[tone]
     var out = {}
     for (var k in map) {
@@ -803,10 +801,10 @@ Item {
     if (out["c"] !== undefined) { out["c"] = pal[0]; out["C"] = pal[1] }
     if (out["p"] !== undefined) { out["p"] = pal[0] }
     if (out["b"] !== undefined) { out["b"] = pal[2] }
-    // Hair → helm shell; face covered (metal) from chain upward.
+    // Hair → helm shell; face covered (metal) from chainmail upward.
     if (out["h"] !== undefined) {
       out["h"] = pal[1]
-      if (tone >= 2 && out["s"] !== undefined) out["s"] = pal[0]
+      if (tone >= 1 && out["s"] !== undefined) out["s"] = pal[0]
     }
     return out
   }
@@ -2704,11 +2702,11 @@ Item {
             var legH = (crouch ? 5 : 8) * s
             var tone = root.armorTier().tone
             var pal = root.armorTierPalettes[tone]
-            var tee = tone ? pal[0] : "#8ecff0"
-            var teeDark = tone ? pal[1] : "#5a9ec9"
-            var jeans = tone ? pal[0] : "#4a3fa0"
-            var jeansDark = tone ? pal[1] : "#3a3080"
-            var shoes = tone ? pal[1] : "#6b4420"
+            var tee = pal[0]
+            var teeDark = pal[1]
+            var jeans = pal[0]
+            var jeansDark = pal[1]
+            var shoes = pal[1]
             // head
             ctx.fillStyle = "#3a2a1a"
             ctx.fillRect(x + 4 * s, y + dy, 8 * s, 8 * s)
