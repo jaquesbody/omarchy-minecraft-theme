@@ -8,6 +8,7 @@ Item {
 
   property bool opened: false
   property var shell: null
+  property var manifest: null
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
 
   function open(payload) {
@@ -147,23 +148,44 @@ Item {
   }
 
   function loadApps() {
-    if (!appLibrary) return
     try {
-      var rows = appLibrary.sortedEntries("")
+      var values = (typeof DesktopEntries !== "undefined" && DesktopEntries.applications)
+        ? (DesktopEntries.applications.values || []) : []
       var out = []
-      for (var i = 0; i < rows.length; i++) {
-        var e = rows[i].entry
+      for (var i = 0; i < values.length; i++) {
+        var e = values[i]
+        if (!e || e.noDisplay) continue
         var id = String(e.id || "")
         if (!id) continue
+        var name = String(e.name || id)
+        if (!name) continue
         out.push({
-          name: appLibrary.entryName(e),
+          name: name,
           id: id,
-          sub: appLibrary.entrySubtext(e)
+          sub: String(e.genericName || "")
         })
       }
+      out.sort(function(a, b) {
+        var an = a.name.toLowerCase()
+        var bn = b.name.toLowerCase()
+        if (an < bn) return -1
+        if (an > bn) return 1
+        return 0
+      })
       appRows = out
-      if (opened) invCanvas.requestPaint()
+      if (opened && invCanvas) invCanvas.requestPaint()
     } catch (err) {}
+  }
+
+  function launchApp(a) {
+    if (!a || !a.id) return
+    if (appLibrary && typeof appLibrary.launch === "function") {
+      appLibrary.launch(a.id, a.name)
+      return
+    }
+    Quickshell.execDetached([
+      "uwsm-app", "--", "gtk-launch", a.id + ".desktop"
+    ])
   }
 
   Timer {
@@ -173,9 +195,9 @@ Item {
   }
 
   Connections {
-    target: root.appLibrary
-    function onAppsChanged() { root.loadApps() }
-    enabled: root.appLibrary !== null
+    target: typeof DesktopEntries !== "undefined" ? DesktopEntries.applications : null
+    function onValuesChanged() { root.loadApps() }
+    enabled: target !== null
   }
 
   FileView {
@@ -1017,8 +1039,8 @@ Item {
               if (mi >= 0) {
                 if (root.menuTabs[root.selectedTab].route === "apps") {
                   var a = root.appRows[mi]
-                  if (a && root.appLibrary) {
-                    root.appLibrary.launch(a.id, a.name)
+                  if (a) {
+                    root.launchApp(a)
                     root.close()
                   }
                 } else {
@@ -1227,7 +1249,7 @@ Item {
               ctx.font = String(7 * s) + "px Monocraft, monospace"
               ctx.textAlign = "left"
               ctx.textBaseline = "top"
-              var msg = isApps ? (root.appLibrary ? "Loading apps..." : "Apps unavailable")
+              var msg = isApps ? (root.appRows.length === 0 ? "No apps found" : "Loading apps...")
                              : "No items"
               ctx.fillText(msg, x0 * s, (y0 + 8) * s)
               return
