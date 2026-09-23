@@ -121,8 +121,7 @@ Item {
     hoveredSlot = -1
     contextSlot = -1
     pinnedSlot = -1
-    dragFrom = -1
-    dragging = false
+    clearDrag()
     hideTip()
   }
   // IPC probe for toggle scripts (FLAG files desync across shell restarts).
@@ -652,21 +651,73 @@ Item {
     return slots[i]
   }
 
-  // Drag & drop (classic view): press → drag → drop swaps main/hotbar items.
+  // Drag & drop: classic slot↔slot, plus menu/app → hotbar from any tab.
   property int dragFrom: -1
+  property int dragMenuFrom: -1
+  property var dragPayload: null
   property bool dragging: false
   property real dragX: 0
   property real dragY: 0
 
+  function clearDrag() {
+    dragFrom = -1
+    dragMenuFrom = -1
+    dragPayload = null
+    dragging = false
+  }
+
   function beginDrag(i) {
     if (i < mainBase) return
     dragFrom = i
+    dragMenuFrom = -1
+    dragPayload = null
     dragging = false
   }
+
+  // Start a drag from the active tab's menu/app grid.
+  function beginMenuDrag(mi) {
+    if (selectedTab < 0 || mi < 0) return
+    var payload = menuDragPayload(mi)
+    if (!payload) return
+    dragFrom = -1
+    dragMenuFrom = mi
+    dragPayload = payload
+    dragging = false
+  }
+
+  // Menu leaf / desktop app → hotbar item {name,cmd,rows,colors}.
+  function menuDragPayload(mi) {
+    if (selectedTab < 0 || mi < 0) return null
+    if (menuTabs[selectedTab].route === "apps") {
+      var a = appRows[mi]
+      if (!a || !a.id) return null
+      var spr = appSpriteFor(a.name)
+      return {
+        name: a.name,
+        cmd: ["uwsm-app", "--", "gtk-launch", a.id + ".desktop"],
+        rows: (spr && spr.rows) ? spr.rows : gridGenericApp,
+        colors: (spr && spr.colors) ? spr.colors : mapGenericApp
+      }
+    }
+    var it = menuItemAt(mi)
+    if (!it) return null
+    var kids = it[4] || []
+    if (kids.length > 0) return null
+    var action = String(it[2] || "")
+    if (!action.length) return null
+    var label = String(it[1] || "Item")
+    return {
+      name: label,
+      cmd: ["bash", "-lc", action],
+      rows: gridGenericCmd,
+      colors: mapGenericCmd
+    }
+  }
+
   function moveDrag(bx, by) {
-    if (dragFrom < 0) return
+    if (dragFrom < 0 && dragMenuFrom < 0) return
     if (!dragging) {
-      var o = slotOrigin(dragFrom)
+      var o = (dragMenuFrom >= 0) ? menuSlotOrigin(dragMenuFrom) : slotOrigin(dragFrom)
       var dx = bx - (o.x + slot / 2)
       var dy = by - (o.y + slot / 2)
       if (dx * dx + dy * dy > 9) dragging = true
@@ -677,15 +728,32 @@ Item {
       if (invCanvas) invCanvas.requestPaint()
     }
   }
+
   function endDrag(bx, by) {
-    if (dragFrom < 0) return false
+    var menuFrom = dragMenuFrom
+    var payload = dragPayload
+    if (dragFrom < 0 && menuFrom < 0) return false
     var from = dragFrom
     var wasDrag = dragging
-    dragFrom = -1
-    dragging = false
+    clearDrag()
     if (invCanvas) invCanvas.requestPaint()
     if (!wasDrag) return false
+
     var to = hitSlot(bx, by)
+
+    // Menu/app → hotbar drop (only the hotbar strip is a valid target on tabs).
+    if (menuFrom >= 0) {
+      if (payload && to >= hotbarBase && to < hotbarBase + 9) {
+        var ma = slots
+        ma[to] = payload
+        slots = ma
+        saveHotbar()
+        hideTip()
+        if (invCanvas) invCanvas.requestPaint()
+      }
+      return true
+    }
+
     if (to < mainBase || to === from) return true
     // Swap contents (hotbar ↔ main or main ↔ main).
     var a = slots
@@ -1407,6 +1475,33 @@ Item {
   ]
   readonly property var mapPrinter: { "p": "#6a6a78", "P": "#3a3a48", "w": "#ffffff", "W": "#e0e0e8" }
 
+  // Fallback art for menu leaves / apps with no brand sprite (need rows+colors
+  // so saveHotbar → HUD accepts the dropped item).
+  readonly property var gridGenericApp: [
+    "#########",
+    "#kkkkkkk#",
+    "#kwwwwwk#",
+    "#kwbbbwk#",
+    "#kwbbbwk#",
+    "#kwbbbwk#",
+    "#kwwwwwk#",
+    "#kkkkkkk#",
+    "#########"
+  ]
+  readonly property var mapGenericApp: { "#": "#2a2a35", "k": "#3a3a48", "w": "#c0c0d0", "b": "#5b9bd5" }
+  readonly property var gridGenericCmd: [
+    "#########",
+    "#ppppppp#",
+    "#p#####p#",
+    "#p#www#p#",
+    "#p#wgw#p#",
+    "#p#wgw#p#",
+    "#p#####p#",
+    "#ppppppp#",
+    "#########"
+  ]
+  readonly property var mapGenericCmd: { "#": "#2a2a35", "p": "#8b6914", "w": "#d4b06a", "g": "#51cf66" }
+
   readonly property var gridClipboard: [
     "..#####..",
     ".#ccccc#.",
@@ -1581,9 +1676,16 @@ Item {
           hoverEnabled: true
           z: -1
           onPressed: function(mouse) {
-            // hitSlot already limits to the hotbar row when a tab is open.
             var bx = mouse.x / panel.s
             var by = mouse.y / panel.s
+            // Tab grid first (apps / menu leaves), then classic/hotbar slots.
+            if (root.selectedTab >= 0) {
+              var mi = root.hitMenuSlot(bx, by)
+              if (mi >= 0) {
+                root.beginMenuDrag(mi)
+                return
+              }
+            }
             root.beginDrag(root.hitSlot(bx, by))
           }
           onPositionChanged: function(mouse) {
@@ -1895,17 +1997,28 @@ Item {
               ctx.textBaseline = "top"
             }
 
-            // Drag ghost follows the cursor
-            if (root.dragging && root.dragFrom >= 0) {
-              var dit = root.slots[root.dragFrom]
-              if (dit && dit.rows) {
+            // Drag ghost follows the cursor (classic slots or menu/app payload).
+            if (root.dragging) {
+              var ghostRows = null
+              var ghostColors = null
+              if (root.dragPayload && root.dragPayload.rows && root.dragPayload.rows.length) {
+                ghostRows = root.dragPayload.rows
+                ghostColors = root.dragPayload.colors
+              } else if (root.dragFrom >= 0) {
+                var dit = root.slots[root.dragFrom]
+                if (dit && dit.rows) {
+                  ghostRows = dit.rows
+                  ghostColors = dit.colors
+                }
+              }
+              if (ghostRows) {
                 ctx.globalAlpha = 0.85
-                var diw = dit.rows[0].length
-                var dih = dit.rows.length
+                var diw = ghostRows[0].length
+                var dih = ghostRows.length
                 root.paintGrid(ctx,
                   Math.round((root.dragX - diw / 2) * s),
                   Math.round((root.dragY - dih / 2) * s),
-                  s, dit.rows, dit.colors)
+                  s, ghostRows, ghostColors)
                 ctx.globalAlpha = 1.0
               }
             }
@@ -1946,17 +2059,34 @@ Item {
                 ctx.textBaseline = "top"
               }
             }
-            // Drag ghost (so reordering is visible while a tab is open)
-            if (root.dragging && root.dragFrom >= 0) {
-              var dit = root.slots[root.dragFrom]
-              if (dit && dit.rows) {
+            // Drag ghost + hotbar drop-target highlight (tab view).
+            if (root.dragging && (root.dragPayload || root.dragFrom >= 0)) {
+              var dropTo = root.hitSlot(root.dragX, root.dragY)
+              if (dropTo >= root.hotbarBase && dropTo < root.hotbarBase + 9) {
+                var dro = root.slotOrigin(dropTo)
+                ctx.fillStyle = "rgba(255, 255, 255, 0.45)"
+                ctx.fillRect(dro.x * s, dro.y * s, root.slot * s, root.slot * s)
+              }
+              var ghostRows = null
+              var ghostColors = null
+              if (root.dragPayload && root.dragPayload.rows && root.dragPayload.rows.length) {
+                ghostRows = root.dragPayload.rows
+                ghostColors = root.dragPayload.colors
+              } else if (root.dragFrom >= 0) {
+                var dit = root.slots[root.dragFrom]
+                if (dit && dit.rows) {
+                  ghostRows = dit.rows
+                  ghostColors = dit.colors
+                }
+              }
+              if (ghostRows) {
                 ctx.globalAlpha = 0.85
-                var diw = dit.rows[0].length
-                var dih = dit.rows.length
+                var diw = ghostRows[0].length
+                var dih = ghostRows.length
                 root.paintGrid(ctx,
                   Math.round((root.dragX - diw / 2) * s),
                   Math.round((root.dragY - dih / 2) * s),
-                  s, dit.rows, dit.colors)
+                  s, ghostRows, ghostColors)
                 ctx.globalAlpha = 1.0
               }
             }
@@ -2001,71 +2131,75 @@ Item {
             var show = Math.min(count, maxShow)
             for (var i = 0; i < show; i++) {
               var o = root.menuSlotOrigin(i)
-              drawSlotFrame(ctx, o.x * s, o.y * s, root.slot * s, s, false)
-              if (i === root.hoveredSlot) {
-                ctx.fillStyle = "rgba(255, 255, 255, 0.35)"
-                ctx.fillRect(o.x * s, o.y * s, root.slot * s, root.slot * s)
-              }
+              // Hide the source cell while its payload is being dragged.
+              var srcDrag = root.dragging && root.dragMenuFrom === i
+              if (!srcDrag) {
+                drawSlotFrame(ctx, o.x * s, o.y * s, root.slot * s, s, false)
+                if (i === root.hoveredSlot) {
+                  ctx.fillStyle = "rgba(255, 255, 255, 0.35)"
+                  ctx.fillRect(o.x * s, o.y * s, root.slot * s, root.slot * s)
+                }
 
-              if (isApps) {
-                // Pixel sprite → Omarchy system icon → letter fallback.
-                var a = root.appRows[i]
-                var spr = a ? root.appSpriteFor(a.name) : null
-                var pad = 1
-                var ix = (o.x + pad) * s
-                var iy = (o.y + pad) * s
-                var isz = (root.slot - 2 * pad) * s
-                if (spr && spr.rows) {
-                  var siw = spr.rows[0].length
-                  var sih = spr.rows.length
-                  root.paintGrid(ctx,
-                    (o.x + Math.floor((root.slot - siw) / 2)) * s,
-                    (o.y + Math.floor((root.slot - sih) / 2)) * s,
-                    s, spr.rows, spr.colors)
-                } else if (a && a.iconUrl) {
-                  var img = root.appIconImage(a.iconUrl)
-                  if (img && img.status === Image.Ready) {
-                    ctx.imageSmoothingEnabled = false
-                    ctx.drawImage(img, ix, iy, isz, isz)
-                    ctx.imageSmoothingEnabled = true
+                if (isApps) {
+                  // Pixel sprite → Omarchy system icon → letter fallback.
+                  var a = root.appRows[i]
+                  var spr = a ? root.appSpriteFor(a.name) : null
+                  var pad = 1
+                  var ix = (o.x + pad) * s
+                  var iy = (o.y + pad) * s
+                  var isz = (root.slot - 2 * pad) * s
+                  if (spr && spr.rows) {
+                    var siw = spr.rows[0].length
+                    var sih = spr.rows.length
+                    root.paintGrid(ctx,
+                      (o.x + Math.floor((root.slot - siw) / 2)) * s,
+                      (o.y + Math.floor((root.slot - sih) / 2)) * s,
+                      s, spr.rows, spr.colors)
+                  } else if (a && a.iconUrl) {
+                    var img = root.appIconImage(a.iconUrl)
+                    if (img && img.status === Image.Ready) {
+                      ctx.imageSmoothingEnabled = false
+                      ctx.drawImage(img, ix, iy, isz, isz)
+                      ctx.imageSmoothingEnabled = true
+                    } else {
+                      ctx.fillStyle = "#e8e8f0"
+                      ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
+                      ctx.textAlign = "center"
+                      ctx.textBaseline = "middle"
+                      ctx.fillText(a && a.name ? a.name.charAt(0).toUpperCase() : "?",
+                                   (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
+                    }
                   } else {
                     ctx.fillStyle = "#e8e8f0"
                     ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
                     ctx.textAlign = "center"
                     ctx.textBaseline = "middle"
-                    ctx.fillText(a && a.name ? a.name.charAt(0).toUpperCase() : "?",
-                                 (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
+                    var ch = a && a.name ? a.name.charAt(0).toUpperCase() : "?"
+                    ctx.fillText(ch, (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
                   }
+                  ctx.textAlign = "left"
+                  ctx.textBaseline = "top"
                 } else {
-                  ctx.fillStyle = "#e8e8f0"
-                  ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
-                  ctx.textAlign = "center"
-                  ctx.textBaseline = "middle"
-                  var ch = a && a.name ? a.name.charAt(0).toUpperCase() : "?"
-                  ctx.fillText(ch, (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
-                }
-                ctx.textAlign = "left"
-                ctx.textBaseline = "top"
-              } else {
-                var it = root.menuItemAt(i)
-                if (it && it[0]) {
-                  // Glyph icon from omarchy menu
-                  ctx.fillStyle = "#202020"
-                  ctx.font = "bold " + String(8 * s) + "px Symbols Nerd Font, Monocraft, monospace"
-                  ctx.textAlign = "center"
-                  ctx.textBaseline = "middle"
-                  ctx.fillText(it[0], (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
-                } else if (it && it[1]) {
-                  ctx.fillStyle = "#e8e8f0"
-                  ctx.font = "bold " + String(6 * s) + "px Monocraft, monospace"
-                  ctx.textAlign = "center"
-                  ctx.textBaseline = "middle"
-                  ctx.fillText(String(it[1]).charAt(0).toUpperCase(), (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
-                }
-                // Folder / has-children marker
-                if (it && it[4] && it[4].length) {
-                  ctx.fillStyle = "#ffd43b"
-                  ctx.fillRect((o.x + root.slot - 5) * s, (o.y + root.slot - 5) * s, 3 * s, 3 * s)
+                  var it = root.menuItemAt(i)
+                  if (it && it[0]) {
+                    // Glyph icon from omarchy menu
+                    ctx.fillStyle = "#202020"
+                    ctx.font = "bold " + String(8 * s) + "px Symbols Nerd Font, Monocraft, monospace"
+                    ctx.textAlign = "center"
+                    ctx.textBaseline = "middle"
+                    ctx.fillText(it[0], (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
+                  } else if (it && it[1]) {
+                    ctx.fillStyle = "#e8e8f0"
+                    ctx.font = "bold " + String(6 * s) + "px Monocraft, monospace"
+                    ctx.textAlign = "center"
+                    ctx.textBaseline = "middle"
+                    ctx.fillText(String(it[1]).charAt(0).toUpperCase(), (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
+                  }
+                  // Folder / has-children marker
+                  if (it && it[4] && it[4].length) {
+                    ctx.fillStyle = "#ffd43b"
+                    ctx.fillRect((o.x + root.slot - 5) * s, (o.y + root.slot - 5) * s, 3 * s, 3 * s)
+                  }
                 }
               }
             }
