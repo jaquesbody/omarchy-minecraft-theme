@@ -1,5 +1,4 @@
 import QtQuick
-import QtMultimedia
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
@@ -24,6 +23,10 @@ Item {
   property int cursorX: 0
   property int cursorY: 0
   property bool blinking: false
+  // Play the walk-cycle only while the mouse has moved recently.
+  property bool animPlay: false
+  property int lastAnimX: -1
+  property int lastAnimY: -1
 
   Timer {
     id: cursorTimer
@@ -46,11 +49,25 @@ Item {
       onTextChanged: {
         var parts = text.trim().split(/[,\s]+/)
         if (parts.length >= 2) {
-          root.cursorX = Number(parts[0]) || 0
-          root.cursorY = Number(parts[1]) || 0
+          var nx = Number(parts[0]) || 0
+          var ny = Number(parts[1]) || 0
+          root.cursorX = nx
+          root.cursorY = ny
+          if (nx !== root.lastAnimX || ny !== root.lastAnimY) {
+            root.lastAnimX = nx
+            root.lastAnimY = ny
+            root.animPlay = true
+            animIdle.restart()
+          }
         }
       }
     }
+  }
+
+  Timer {
+    id: animIdle
+    interval: 700
+    onTriggered: root.animPlay = false
   }
 
   Timer {
@@ -68,14 +85,15 @@ Item {
     interval: 140
     onTriggered: root.blinking = false
   }
-  // Optional clip: drop steve.mp4 into the plugin dir to animate.
+  // Optional clip: drop steve.gif (ping-pong walk, green removed) into the
+  // plugin dir. Plays only while the mouse cursor is moving.
   property bool hasVideo: false
   FileView {
     id: videoProbe
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.jaquesbody.minecraft-steve/steve.mp4"
+    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.jaquesbody.minecraft-steve/steve.gif"
     preload: true
     printErrors: false
-    onLoaded: root.hasVideo = text().length > 0
+    onLoaded: root.hasVideo = data().length > 0
     onLoadFailed: root.hasVideo = false
   }
 
@@ -124,15 +142,24 @@ Item {
           height: panel.steveH
           transform: Scale { xScale: -1; origin.x: steveFlip.width / 2; origin.y: steveFlip.height / 2 }
 
-          Video {
-            id: steveVideo
+          // Ping-pong walk cycle (green screen removed). Plays only while
+          // the cursor moves; freezes on frame 0 when idle.
+          AnimatedImage {
+            id: steveAnim
             anchors.fill: parent
-            source: Qt.resolvedUrl("steve.mp4")
-            visible: root.hasVideo && source != ""
-            loops: MediaPlayer.Infinite
-            autoPlay: root.opened && root.hasVideo
-            fillMode: VideoOutput.PreserveAspectFit
-            muted: true
+            source: Qt.resolvedUrl("steve.gif")
+            visible: root.hasVideo && status === AnimatedImage.Ready
+            playing: root.opened && root.hasVideo && root.animPlay
+            fillMode: Image.PreserveAspectFit
+            smooth: false
+            mipmap: false
+            asynchronous: false
+            onPlayingChanged: {
+              if (!playing) {
+                // Restart from the first frame next time the mouse moves.
+                try { steveAnim.currentFrame = 0 } catch (e) {}
+              }
+            }
           }
 
           Image {
@@ -169,7 +196,9 @@ Item {
           id: posLabel
           anchors.top: steveFlip.bottom
           anchors.topMargin: 3 * panel.s
-          anchors.horizontalCenter: parent.horizontalCenter
+          // Pin "P" of Position ~5px from the left edge of the screen.
+          x: 5 - root.anchorX * panel.s
+          horizontalAlignment: Text.AlignLeft
           text: "Position " + root.cursorX + ", " + root.cursorY
           color: "#ffffff"
           style: Text.Outline

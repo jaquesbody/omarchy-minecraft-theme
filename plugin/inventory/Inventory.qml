@@ -140,11 +140,11 @@ Item {
       root.launchAbout()
       return
     }
-    if (action.length) {
-      Quickshell.execDetached(["bash", "-lc", action])
-      root.close()
-      return
-    }
+            if (action.length) {
+              Quickshell.execDetached(["bash", "-lc", action])
+              root.close()
+              return
+            }
     // Non-actionable leaf (submenu without children in snapshot) — no-op
   }
 
@@ -169,9 +169,9 @@ Item {
   }
 
   // About leaf with no children → open Omarchy's official About window.
+  // Keep inventory open so the user returns to it when About closes.
   function launchAbout() {
     Quickshell.execDetached(["omarchy-launch-about"])
-    root.close()
   }
 
   function loadApps() {
@@ -371,15 +371,74 @@ Item {
     return out.slice(0, 4)
   }
 
-  // What armor well `w` (0..3) currently shows: suggestion item or clothing.
+  // Left column (armor wells 0..3): always Steve's clothing / armor tier.
+  // Smart suggestions live in the right-side craft wells instead.
   function armorWellItem(w) {
-    var src = suggestSrc
-    if (src >= 0) {
-      var sug = suggestionsFor(src)
-      if (w < sug.length) return sug[w]
-      return null
-    }
     return slots[armorBase + w]
+  }
+
+  // Armor material tier from installed .desktop count (progression over time
+  // as apps are installed). Note drawn on the classic inventory panel.
+  // Cloth → Wood → Chain → Iron → Diamond.
+  function armorTier() {
+    var n = appRows.length
+    if (n >= 90) return { name: "Diamond", tone: 4, count: n }
+    if (n >= 65) return { name: "Iron", tone: 3, count: n }
+    if (n >= 40) return { name: "Chain", tone: 2, count: n }
+    if (n >= 20) return { name: "Wood", tone: 1, count: n }
+    return { name: "Cloth", tone: 0, count: n }
+  }
+  // Material palette for armor icons: [main, dark, accent]
+  // High contrast against the #8b8b8b slot background.
+  readonly property var armorTierPalettes: [
+    ["#3dafd0", "#2f9fc4", "#4a3fa0"], // Cloth (Steve defaults)
+    ["#8b5a2b", "#6b4420", "#5a3a1a"], // Wood
+    ["#5f6f8a", "#3d4a60", "#4a5870"], // Chain (steel blue-gray)
+    ["#e8e8e8", "#909090", "#b8b8b8"], // Iron
+    ["#5decd7", "#1f8f82", "#3ab8a8"]  // Diamond
+  ]
+  // Recolor a clothing grid's map for the current armor tier.
+  function armorPaletteFor(map) {
+    var tone = armorTier().tone
+    var pal = armorTierPalettes[tone]
+    var out = {}
+    for (var k in map) {
+      out[k] = map[k]
+    }
+    // Garment keys used by helmet/chest/legs/boots art.
+    if (out["c"] !== undefined) { out["c"] = pal[0]; out["C"] = pal[1] }
+    if (out["p"] !== undefined) { out["p"] = pal[0] }
+    if (out["b"] !== undefined) { out["b"] = pal[2] }
+    // Helmet: recolor shell with the tier; keep the face at cloth/wood,
+    // cover it (metal helm) from chain upward.
+    if (out["h"] !== undefined && tone >= 1) {
+      out["h"] = pal[1]
+      if (tone >= 2 && out["s"] !== undefined) out["s"] = pal[0]
+    }
+    return out
+  }
+
+  // Right-side craft wells (4..7) + result (8): smart suggestions.
+  // Result shows the hovered/pinned source app; arrow points at it.
+  function craftWellItem(i) {
+    if (i === resultIdx) {
+      var src = suggestSrc
+      return src >= 0 ? slots[src] : null
+    }
+    var sug = suggestionsFor(suggestSrc)
+    var w = i - craftBase
+    return (w >= 0 && w < sug.length) ? sug[w] : null
+  }
+  function launchCraftWell(i) {
+    var it = craftWellItem(i)
+    if (it && it.cmd && it.cmd.length)
+      Quickshell.execDetached(it.cmd)
+  }
+  // Unified display item for tooltips / icon drawing.
+  function slotDisplayItem(i) {
+    if (i >= armorBase && i < armorBase + 4) return armorWellItem(i)
+    if (i >= craftBase && i <= resultIdx) return craftWellItem(i)
+    return slots[i]
   }
 
   // Drag & drop (classic view): press → drag → drop swaps main/hotbar items.
@@ -441,6 +500,8 @@ Item {
         if (o && o.order && o.order.length === 9) applyHotbarOrder(o.order)
       } catch (e) {}
     }
+    // Another writer (or ourselves after setText) changed the file.
+    onFileChanged: reload()
   }
   function saveHotbar() {
     var names = []
@@ -449,6 +510,8 @@ Item {
       names.push(it && it.name ? it.name : "")
     }
     hotbarFile.setText(JSON.stringify({ order: names }) + "\n")
+    // Push an immediate re-read so ordering settles without waiting for inotify.
+    hotbarFile.reload()
   }
   function applyHotbarOrder(names) {
     // Reorder hotbar slots to match persisted names; unknown → keep in place.
@@ -1306,7 +1369,7 @@ Item {
             } else {
               i = root.hitSlot(bx, by)
               if (i >= 0) {
-                var it = (i < 4) ? root.armorWellItem(i) : root.slots[i]
+                var it = root.slotDisplayItem(i)
                 label = it ? it.name : ""
                 origin = root.slotOrigin(i)
               }
@@ -1358,8 +1421,12 @@ Item {
               return
             }
             var i = root.hitSlot(bx, by)
-            if (i >= 0 && i < 4) {
+            if (i >= root.armorBase && i < root.armorBase + 4) {
               root.launchArmorWell(i)
+              return
+            }
+            if (i >= root.craftBase && i <= root.resultIdx) {
+              root.launchCraftWell(i)
               return
             }
             if (i >= root.mainBase) {
@@ -1500,8 +1567,9 @@ Item {
             }
             var ro = root.slotOrigin(root.resultIdx)
             drawSlotFrame(ctx, ro.x * s, ro.y * s, root.craftSlot * s, s, false)
-            // arrow between craft and result
-            drawArrow(ctx, (root.craftX + 36) * s, (root.craftY + 8) * s, s)
+            // Arrow between craft grid and result — must end before craftResultX.
+            // craft col1 ends at craftX+craftPitch+craftSlot=138; result at 154.
+            drawArrow(ctx, (root.craftX + 30) * s, (root.craftY + 8) * s, s)
 
             // Main 3×9
             for (var m = 0; m < 27; m++) {
@@ -1518,10 +1586,11 @@ Item {
               drawSlotFrame(ctx, ho.x * s, ho.y * s, root.slot * s, s, false)
             }
 
-            // Icons + hover highlight (armor wells show clothing or suggestions)
+            // Icons + hover highlight
+            // Armor wells: clothing recolored by tier. Craft/result: smart suggestions.
             for (var i = 0; i < root.slotCount; i++) {
               var isArmor = i >= root.armorBase && i < root.armorBase + 4
-              var it = isArmor ? root.armorWellItem(i) : root.slots[i]
+              var it = root.slotDisplayItem(i)
               var o = root.slotOrigin(i)
               if (o.x < 0) continue
               var sz = (i >= root.craftBase && i <= root.resultIdx) ? root.craftSlot : root.slot
@@ -1536,11 +1605,12 @@ Item {
               if (!it) continue
 
               if (it.rows) {
+                var cmap = isArmor ? root.armorPaletteFor(it.colors) : it.colors
                 var iw = it.rows[0].length
                 var ih = it.rows.length
                 var iox = o.x + Math.floor((sz - iw) / 2)
                 var ioy = o.y + Math.floor((sz - ih) / 2)
-                root.paintGrid(ctx, iox * s, ioy * s, s, it.rows, it.colors)
+                root.paintGrid(ctx, iox * s, ioy * s, s, it.rows, cmap)
               } else if (it.name) {
                 ctx.fillStyle = "#e8e8f0"
                 ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
@@ -1550,6 +1620,19 @@ Item {
                 ctx.textAlign = "left"
                 ctx.textBaseline = "top"
               }
+            }
+
+            // Armor progression note (explains tier rule on the panel itself).
+            // Sits in the gap under the top strip / above the main 3×9 grid.
+            {
+              var at = root.armorTier()
+              ctx.fillStyle = "#404040"
+              ctx.font = "bold " + String(5 * s) + "px Monocraft, monospace"
+              ctx.textAlign = "left"
+              ctx.textBaseline = "top"
+              ctx.fillText(
+                "Armor: " + at.name + " · " + at.count + " apps (install more to level up)",
+                root.pad * s, (root.mainY - 6) * s)
             }
 
             // Drag ghost follows the cursor

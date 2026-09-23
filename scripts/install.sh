@@ -66,7 +66,7 @@ enable_plugin() {
   for qml in "$src"/*.qml; do
     [ -f "$qml" ] && cp "$qml" "$dst/"
   done
-  for img in "$src"/*.png "$src"/*.webp "$src"/*.json "$src"/*.mp4 "$src"/*.webm; do
+  for img in "$src"/*.png "$src"/*.webp "$src"/*.json "$src"/*.mp4 "$src"/*.webm "$src"/*.gif; do
     [ -f "$img" ] && cp "$img" "$dst/"
   done
   local SHELL_JSON="$HOME/.config/omarchy/shell.json"

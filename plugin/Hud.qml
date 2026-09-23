@@ -472,6 +472,8 @@ Item {
     watchChanges: true
     printErrors: false
     onLoaded: root.applyHotbarOrder()
+    // Inventory rewrites this file on drag-drop; reload so the HUD updates live.
+    onFileChanged: reload()
   }
   function applyHotbarOrder() {
     try {
