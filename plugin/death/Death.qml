@@ -8,6 +8,19 @@ Item {
   property bool opened: false
   property int score: 0
   property int hoveredBtn: -1
+  property string deathQuote: ""
+
+  // Rotating death-screen flavor quotes (classic MC energy, original text).
+  readonly property var quotes: [
+    "Your armor was mere cloth against fate.",
+    "Even diamonds crack under pressure.",
+    "The void remembers your name.",
+    "Respawn and try not to do that again.",
+    "Pro tip: don't.",
+    "Score is temporary. Glory is forever.",
+    "Somewhere, a creeper is laughing.",
+    "You died doing what you loved: computing."
+  ]
 
   function open(payload) {
     try {
@@ -17,6 +30,7 @@ Item {
     } catch (e) {
       score = Math.floor(Math.random() * 500)
     }
+    deathQuote = quotes[Math.floor(Math.random() * quotes.length)]
     opened = true
     hoveredBtn = -1
     Quickshell.execDetached([
@@ -110,6 +124,18 @@ Item {
           font.pixelSize: 16
           style: Text.Raised
           styleColor: "#3f0000"
+        }
+
+        Text {
+          anchors.horizontalCenter: parent.horizontalCenter
+          width: 420
+          horizontalAlignment: Text.AlignHCenter
+          wrapMode: Text.WordWrap
+          text: root.deathQuote
+          color: "#ffd0d0"
+          font.family: "Monocraft"
+          font.pixelSize: 12
+          opacity: 0.95
         }
 
         // Button column — classic wide gray buttons, original bevel

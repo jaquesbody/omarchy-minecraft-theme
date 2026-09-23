@@ -73,6 +73,7 @@ Item {
         var h = parseInt(String(text).trim(), 10)
         if (isFinite(h) && h >= 0) {
           root.metricHours = h
+          root.maybeArmorAchievement()
           if (invCanvas) invCanvas.requestPaint()
         }
       }
@@ -88,6 +89,7 @@ Item {
           var n = JSON.parse(text).length
           if (isFinite(n)) {
             root.metricWins = n
+            root.maybeArmorAchievement()
             if (invCanvas) invCanvas.requestPaint()
           }
         } catch (e) {}
@@ -111,6 +113,7 @@ Item {
     }
     if (appRefreshTimer) appRefreshTimer.restart()
     refreshMetrics()
+    maybeArmorAchievement()
     // Re-sync hotbar from disk in case HUD/inventory drifted.
     hotbarFile.reload()
   }
@@ -133,6 +136,51 @@ Item {
   property real tipX: 0
   property real tipY: 0
   property bool tipVisible: false
+
+  // F3 debug overlay + creeper/empty-hotbar key eggs (classic + tabs).
+  property bool debugOverlay: false
+  property string keyBuf: ""
+  Timer {
+    id: keyBufClear
+    interval: 1200
+    onTriggered: root.keyBuf = ""
+  }
+  function handleInventoryKey(ev) {
+    var k = ev.key
+    var t = ev.text || ""
+    // F3 — toggle debug metrics overlay.
+    if (k === Qt.Key_F3) {
+      debugOverlay = !debugOverlay
+      if (invCanvas) invCanvas.requestPaint()
+      ev.accepted = true
+      return
+    }
+    // Q — classic MC drop. Empty inventory just laughs at you.
+    if (k === Qt.Key_Q && (ev.modifiers & Qt.AltModifier) === 0) {
+      Quickshell.execDetached([
+        Quickshell.env("HOME") + "/.local/bin/minecraft-toast",
+        "You threw nothing",
+        "There is nothing in your hand"
+      ])
+      ev.accepted = true
+      return
+    }
+    // Type "creeper" for the classic AW MAN.
+    if (t.length === 1 && /[a-z]/i.test(t)) {
+      keyBuf = (keyBuf + t.toLowerCase()).slice(-7)
+      keyBufClear.restart()
+      if (keyBuf === "creeper") {
+        keyBuf = ""
+        Quickshell.execDetached([
+          Quickshell.env("HOME") + "/.local/bin/minecraft-toast",
+          "Aww man...",
+          "Creeper? Aw man"
+        ])
+        ev.accepted = true
+        return
+      }
+    }
+  }
 
   // Menu tab state: -1 = classic inventory; >=0 shows that route's children.
   property int selectedTab: -1
@@ -285,6 +333,7 @@ Item {
         return 0
       })
       appRows = out
+      maybeArmorAchievement()
       if (opened && invCanvas) invCanvas.requestPaint()
     } catch (err) {}
   }
@@ -385,9 +434,11 @@ Item {
       smooth: false
       mipmap: false
       visible: false
-      sourceSize: Qt.size(32, 32)
+      sourceSize: Qt.size(48, 48)
       onStatusChanged: {
-        if (invCanvas && status === Image.Ready) invCanvas.requestPaint()
+        // Repaint on Ready OR Error so sprite/letter fallbacks can show.
+        if (invCanvas && (status === Image.Ready || status === Image.Error))
+          invCanvas.requestPaint()
       }
     }
   }
@@ -503,12 +554,29 @@ Item {
   readonly property int playerH: armorColH
   // Extra gap under player/craft so the armor note fits without overlapping.
   readonly property int mainY: 118 + tabH
-  readonly property int hotbarY: mainY + mainRows * pitch + 4
   readonly property int panelW: 176
-  readonly property int panelH: hotbarY + pitch + pad
   // Note band: just below the player/armor column, above the main grid.
   readonly property int noteY: armorY + armorColH + 4
   readonly property int noteCx: Math.floor(panelW / 2)
+
+  // Menu grid rows for the open tab — expand the panel so every item fits
+  // (no "+N more" truncation). Cap keeps the panel on a 768px screen.
+  readonly property int menuItemCount: {
+    if (selectedTab < 0) return 0
+    return (menuTabs[selectedTab].route === "apps") ? appRows.length : menuItems().length
+  }
+  readonly property int menuRowsShow: selectedTab < 0 ? 0
+    : Math.min(15, Math.max(1, Math.ceil(menuItemCount / menuCols)))
+
+  // Hotbar sits below the menu grid when a tab is open (panel grows to fit).
+  readonly property int hotbarY: {
+    if (selectedTab >= 0) {
+      var needed = 28 + tabH + menuRowsShow * pitch + 4
+      return Math.max(mainY + mainRows * pitch + 4, needed)
+    }
+    return mainY + mainRows * pitch + 4
+  }
+  readonly property int panelH: hotbarY + pitch + pad
 
   // Selection state for smart armor-box suggestions (classic view).
   property int contextSlot: -1
@@ -578,9 +646,9 @@ Item {
   }
 
   // Armor material tier from time on device + live activity + installed apps.
-  // Cloth → Wood → Chain → Iron → Diamond.
+  // Cloth → Wood → Chain → Iron → Diamond → Netherite.
   // score = apps + 2×session-hours + 3×open-windows (all three grow with use).
-  // Thresholds: Wood 50, Chain 100, Iron 160, Diamond 220.
+  // Thresholds: Wood 50, Chain 100, Iron 160, Diamond 220, Netherite 300.
   // Metrics refresh on open() + appRefreshTimer so tiers move over time.
   function armorTier() {
     var apps = appRows.length
@@ -588,13 +656,62 @@ Item {
     var wins = Math.max(0, metricWins | 0)
     var score = apps + hours * 2 + wins * 3
     var name = "Cloth", tone = 0
-    if (score >= 220) { name = "Diamond"; tone = 4 }
+    if (score >= 300) { name = "Netherite"; tone = 5 }
+    else if (score >= 220) { name = "Diamond"; tone = 4 }
     else if (score >= 160) { name = "Iron"; tone = 3 }
     else if (score >= 100) { name = "Chain"; tone = 2 }
     else if (score >= 50) { name = "Wood"; tone = 1 }
     return {
       name: name, tone: tone, count: apps, score: score,
       hours: hours, wins: wins
+    }
+  }
+  // Next tier threshold for progress bar / enchant glint (null = maxed).
+  function armorNextThreshold(tone) {
+    if (tone <= 0) return 50
+    if (tone === 1) return 100
+    if (tone === 2) return 160
+    if (tone === 3) return 220
+    if (tone === 4) return 300
+    return null
+  }
+  function armorPrevThreshold(tone) {
+    if (tone <= 0) return 0
+    if (tone === 1) return 50
+    if (tone === 2) return 100
+    if (tone === 3) return 160
+    if (tone === 4) return 220
+    return 300
+  }
+  // Achievement toast when the armor tier levels up (milestone).
+  // Netherite unlock also fires a brief beacon-beam flash on the classic view.
+  property int lastArmorTone: -1
+  property real beaconUntil: 0
+  function maybeArmorAchievement() {
+    var t = armorTier()
+    if (lastArmorTone < 0) { lastArmorTone = t.tone; return }
+    if (t.tone > lastArmorTone) {
+      lastArmorTone = t.tone
+      if (t.tone >= 5) {
+        beaconUntil = Date.now() + 3500
+        beaconTimer.restart()
+      }
+      Quickshell.execDetached([
+        Quickshell.env("HOME") + "/.local/bin/minecraft-toast",
+        "Advancement Made!",
+        "Armor upgraded to " + t.name
+      ])
+    } else if (t.tone < lastArmorTone) {
+      lastArmorTone = t.tone
+    }
+  }
+  Timer {
+    id: beaconTimer
+    interval: 200
+    repeat: true
+    onTriggered: {
+      if (Date.now() >= root.beaconUntil) stop()
+      if (root.opened && root.invCanvas) root.invCanvas.requestPaint()
     }
   }
   // Material palette for armor icons: [main, dark, accent]
@@ -604,7 +721,8 @@ Item {
     ["#8b5a2b", "#6b4420", "#5a3a1a"], // Wood
     ["#5f6f8a", "#3d4a60", "#4a5870"], // Chain (steel blue-gray)
     ["#e8e8e8", "#909090", "#b8b8b8"], // Iron
-    ["#5decd7", "#1f8f82", "#3ab8a8"]  // Diamond
+    ["#5decd7", "#1f8f82", "#3ab8a8"], // Diamond
+    ["#3d3540", "#1a151c", "#2a2230"]  // Netherite (dark purple-gray)
   ]
   // Recolor a clothing grid's map for the current armor tier.
   // Cloth (tone 0) returns the map unchanged — Steve's clothes as authored.
@@ -666,6 +784,68 @@ Item {
     dragging = false
   }
 
+  // Particle crits on a successful menu → hotbar drop.
+  property var critParticles: []
+  property real critUntil: 0
+  function spawnCrits(bx, by) {
+    var pts = []
+    for (var i = 0; i < 8; i++) {
+      var ang = (Math.PI * 2 * i) / 8 + Math.random() * 0.4
+      var spd = 20 + Math.random() * 30
+      pts.push({
+        x: bx, y: by,
+        vx: Math.cos(ang) * spd,
+        vy: Math.sin(ang) * spd - 15
+      })
+    }
+    critParticles = pts
+    critUntil = Date.now() + 450
+    critTimer.restart()
+    if (invCanvas) invCanvas.requestPaint()
+  }
+  Timer {
+    id: critTimer
+    interval: 50
+    repeat: true
+    onTriggered: {
+      if (Date.now() >= root.critUntil) {
+        stop()
+        root.critParticles = []
+      } else {
+        var step = 0.05
+        var a = root.critParticles
+        for (var i = 0; i < a.length; i++) {
+          a[i].x += a[i].vx * step
+          a[i].y += a[i].vy * step
+          a[i].vy += 60 * step
+        }
+        root.critParticles = a.slice()
+      }
+      if (root.opened && root.invCanvas) root.invCanvas.requestPaint()
+    }
+  }
+
+  // Enchant-glint shimmer + fact rotation + F3 idle repaint while open.
+  Timer {
+    id: ambientTimer
+    interval: 400
+    repeat: true
+    running: root.opened && (root.debugOverlay || root.selectedTab >= 0 ||
+      (root.armorNextThreshold(root.armorTier().tone) !== null &&
+       root.armorNextThreshold(root.armorTier().tone) - root.armorTier().score <= 30))
+    onTriggered: { if (root.invCanvas) root.invCanvas.requestPaint() }
+  }
+
+  // Pull async system icons onto the Apps grid as they finish loading.
+  Timer {
+    id: iconSettleTimer
+    interval: 250
+    repeat: true
+    running: root.opened && root.selectedTab >= 0 &&
+      root.menuTabs[root.selectedTab].route === "apps"
+    onTriggered: { if (root.invCanvas) root.invCanvas.requestPaint() }
+  }
+
   function beginDrag(i) {
     if (i < mainBase) return
     dragFrom = i
@@ -685,7 +865,7 @@ Item {
     dragging = false
   }
 
-  // Menu leaf / desktop app → hotbar item {name,cmd,rows,colors}.
+  // Menu leaf / desktop app → hotbar item {name,cmd,rows,colors,iconUrl?}.
   function menuDragPayload(mi) {
     if (selectedTab < 0 || mi < 0) return null
     if (menuTabs[selectedTab].route === "apps") {
@@ -696,7 +876,8 @@ Item {
         name: a.name,
         cmd: ["uwsm-app", "--", "gtk-launch", a.id + ".desktop"],
         rows: (spr && spr.rows) ? spr.rows : gridGenericApp,
-        colors: (spr && spr.colors) ? spr.colors : mapGenericApp
+        colors: (spr && spr.colors) ? spr.colors : mapGenericApp,
+        iconUrl: a.iconUrl || ""
       }
     }
     var it = menuItemAt(mi)
@@ -706,11 +887,13 @@ Item {
     var action = String(it[2] || "")
     if (!action.length) return null
     var label = String(it[1] || "Item")
+    var leafSpr = appSpriteFor(label)
     return {
       name: label,
       cmd: ["bash", "-lc", action],
-      rows: gridGenericCmd,
-      colors: mapGenericCmd
+      rows: (leafSpr && leafSpr.rows) ? leafSpr.rows : gridGenericCmd,
+      colors: (leafSpr && leafSpr.colors) ? leafSpr.colors : mapGenericCmd,
+      glyph: String(it[0] || "")
     }
   }
 
@@ -749,6 +932,8 @@ Item {
         slots = ma
         saveHotbar()
         hideTip()
+        var dro = slotOrigin(to)
+        spawnCrits(dro.x + slot / 2, dro.y + slot / 2)
         if (invCanvas) invCanvas.requestPaint()
       }
       return true
@@ -789,12 +974,15 @@ Item {
     for (var i = 0; i < 9; i++) {
       var it = slots[hotbarBase + i]
       if (it && it.name) {
-        items.push({
+        var rec = {
           name: it.name,
           cmd: it.cmd || [],
           rows: it.rows || [],
           colors: it.colors || {}
-        })
+        }
+        if (it.iconUrl) rec.iconUrl = it.iconUrl
+        if (it.glyph) rec.glyph = it.glyph
+        items.push(rec)
       } else {
         items.push(null)
       }
@@ -807,7 +995,8 @@ Item {
     var a = slots
     for (var i = 0; i < 9; i++) {
       var it = items[i]
-      if (it && it.name && it.rows) a[hotbarBase + i] = it
+      if (it && it.name && (it.rows || it.iconUrl || it.glyph))
+        a[hotbarBase + i] = it
     }
     slots = a
     if (opened && invCanvas) invCanvas.requestPaint()
@@ -893,6 +1082,10 @@ Item {
       selectedTab = i
       menuPath = []
       if (menuTabs[i].route === "apps") root.loadApps()
+      // Villager "hmm" — soft open sound when browsing a new tab.
+      Quickshell.execDetached([
+        Quickshell.env("HOME") + "/.local/bin/minecraft-sound", "open"
+      ])
     }
     hoveredSlot = -1
     hideTip()
@@ -1568,7 +1761,6 @@ Item {
   readonly property int menuGridX: pad
   readonly property int menuGridY: 28 + tabH
   readonly property int menuCols: 9
-  readonly property int menuRowsMax: 5
 
   function hitMenuSlot(px, py) {
     if (selectedTab < 0) return -1
@@ -1580,7 +1772,7 @@ Item {
     if (px < x0 || py < y0) return -1
     var col = Math.floor((px - x0) / pitch)
     var row = Math.floor((py - y0) / pitch)
-    if (col < 0 || col >= menuCols || row < 0 || row >= menuRowsMax) return -1
+    if (col < 0 || col >= menuCols || row < 0 || row >= root.menuRowsShow) return -1
     if (px >= x0 + col * pitch + slot || py >= y0 + row * pitch + slot) {
       // allow full pitch cell for hover feel; only reject past end of slot slightly
     }
@@ -1670,6 +1862,7 @@ Item {
         focus: true
 
         Keys.onEscapePressed: root.close()
+        Keys.onPressed: function(ev) { root.handleInventoryKey(ev) }
 
         MouseArea {
           anchors.fill: parent
@@ -1958,14 +2151,38 @@ Item {
               }
               if (!it) continue
 
-              if (it.rows) {
+              var slotDrew = false
+              if (it.iconUrl) {
+                var simg = root.appIconImage(it.iconUrl)
+                if (simg && simg.status === Image.Ready) {
+                  ctx.imageSmoothingEnabled = false
+                  ctx.drawImage(simg,
+                    (o.x + 1) * s, (o.y + 1) * s,
+                    (sz - 2) * s, (sz - 2) * s)
+                  ctx.imageSmoothingEnabled = true
+                  slotDrew = true
+                }
+              }
+              if (!slotDrew && it.rows) {
                 var cmap = isArmor ? root.armorPaletteFor(it.colors) : it.colors
                 var iw = it.rows[0].length
                 var ih = it.rows.length
                 var iox = o.x + Math.floor((sz - iw) / 2)
                 var ioy = o.y + Math.floor((sz - ih) / 2)
                 root.paintGrid(ctx, iox * s, ioy * s, s, it.rows, cmap)
-              } else if (it.name) {
+                slotDrew = true
+              }
+              if (!slotDrew && it.glyph) {
+                ctx.fillStyle = "#e8e8f0"
+                ctx.font = "bold " + String(8 * s) + "px Symbols Nerd Font, Monocraft, monospace"
+                ctx.textAlign = "center"
+                ctx.textBaseline = "middle"
+                ctx.fillText(it.glyph, (o.x + sz / 2) * s, (o.y + sz / 2) * s)
+                ctx.textAlign = "left"
+                ctx.textBaseline = "top"
+                slotDrew = true
+              }
+              if (!slotDrew && it.name) {
                 ctx.fillStyle = "#e8e8f0"
                 ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
                 ctx.textAlign = "center"
@@ -1974,6 +2191,96 @@ Item {
                 ctx.textAlign = "left"
                 ctx.textBaseline = "top"
               }
+            }
+
+            // Armor wells: durability-style bar under each piece + enchant
+            // glint when the next material tier is close.
+            {
+              var atNow = root.armorTier()
+              var nextT = root.armorNextThreshold(atNow.tone)
+              var prevT = root.armorPrevThreshold(atNow.tone)
+              var nearGlint = false
+              if (nextT !== null && nextT - atNow.score <= 30)
+                nearGlint = true
+              var glintPhase = nearGlint
+                ? (Date.now() % 800) / 800 : -1
+              for (var aw = 0; aw < 4; aw++) {
+                var ao2 = root.slotOrigin(root.armorBase + aw)
+                var barX = ao2.x
+                var barY = ao2.y + root.armorSlot + 1
+                var barW = root.armorSlot
+                var barH = 3
+                ctx.fillStyle = "#2a2a2a"
+                ctx.fillRect(barX * s, barY * s, barW * s, barH * s)
+                var prog = 1
+                if (nextT !== null && nextT > prevT)
+                  prog = Math.max(0, Math.min(1, (atNow.score - prevT) / (nextT - prevT)))
+                else if (nextT === null)
+                  prog = 1
+                ctx.fillStyle = nextT === null ? "#5decd7" : "#80ff20"
+                ctx.fillRect(barX * s, barY * s, Math.round(barW * prog) * s, barH * s)
+                if (nearGlint && glintPhase >= 0) {
+                  var gx = ao2.x + Math.floor(prog * barW * glintPhase)
+                  ctx.fillStyle = "rgba(255, 255, 160, 0.85)"
+                  ctx.fillRect(gx * s, (ao2.y - 1) * s, Math.max(s, 2 * s), (root.armorSlot + 3) * s)
+                }
+              }
+            }
+
+            // Beacon beam — flashes above the armor column after Netherite.
+            if (root.beaconUntil > Date.now() && root.selectedTab < 0) {
+              var beamAlpha = Math.min(1, (root.beaconUntil - Date.now()) / 3500)
+              var bx0 = (root.armorX + 4) * s
+              var bw0 = 8 * s
+              var by0 = (root.armorY - 6) * s
+              var bh0 = (root.armorColH + 12) * s
+              ctx.globalAlpha = 0.35 + 0.4 * Math.abs(Math.sin(Date.now() / 180))
+              ctx.fillStyle = "#5decd7"
+              ctx.fillRect(bx0, by0, bw0, bh0)
+              ctx.fillStyle = "#ffffff"
+              ctx.fillRect(bx0 + 2 * s, by0, Math.max(s, 2 * s), bh0)
+              ctx.globalAlpha = beamAlpha
+              ctx.fillStyle = "#aef7ef"
+              ctx.fillRect(bx0 - s, by0, bw0 + 2 * s, 3 * s)
+              ctx.globalAlpha = 1
+            }
+
+            // Particle crits (successful hotbar drops).
+            if (root.critParticles.length) {
+              for (var cp = 0; cp < root.critParticles.length; cp++) {
+                var p = root.critParticles[cp]
+                var life = Math.max(0, (root.critUntil - Date.now()) / 450)
+                ctx.globalAlpha = life
+                ctx.fillStyle = cp % 2 ? "#ffd43b" : "#ff6b6b"
+                var psz = Math.max(s, Math.round(2 * s * life))
+                ctx.fillRect(Math.round(p.x * s), Math.round(p.y * s), psz, psz)
+                ctx.globalAlpha = 1
+              }
+            }
+
+            // F3 debug overlay — metrics + coords flavor (classic view).
+            if (root.debugOverlay) {
+              var dbgX = root.pad * s
+              var dbgY = root.mainY * s
+              ctx.fillStyle = "rgba(0, 0, 0, 0.75)"
+              ctx.fillRect(dbgX, dbgY, (root.panelW - 2 * root.pad) * s, 34 * s)
+              ctx.fillStyle = "#5decd7"
+              ctx.font = "bold " + String(5 * s) + "px Monocraft, monospace"
+              ctx.textAlign = "left"
+              ctx.textBaseline = "top"
+              var dAt = root.armorTier()
+              ctx.fillText("MC Debug (F3)", dbgX + 2 * s, dbgY + 2 * s)
+              ctx.fillStyle = "#e8e8f0"
+              ctx.font = String(4 * s) + "px Monocraft, monospace"
+              ctx.fillText("apps=" + root.appRows.length +
+                " wins=" + root.metricWins +
+                " hours=" + root.metricHours, dbgX + 2 * s, dbgY + 10 * s)
+              ctx.fillText("armor=" + dAt.name + " " + dAt.score + "pts",
+                dbgX + 2 * s, dbgY + 17 * s)
+              ctx.fillText("fps≈60  scale=" + root.guiScale,
+                dbgX + 2 * s, dbgY + 24 * s)
+              ctx.textAlign = "left"
+              ctx.textBaseline = "top"
             }
 
             // Armor progression note — centered in the gap between the player
@@ -1995,6 +2302,30 @@ Item {
                 root.noteCx * s, (root.noteY + 7) * s)
               ctx.textAlign = "left"
               ctx.textBaseline = "top"
+            }
+
+            // Empty craft → rotating fun facts (easter egg).
+            if (!root.debugOverlay && root.selectedTab < 0) {
+              var srcC = root.suggestSrc
+              if (srcC < 0) {
+                var facts = [
+                  "Fun fact: Minecraft has over 300 million copies sold.",
+                  "Fun fact: Monocraft is an open pixel font.",
+                  "Fun fact: Cows will follow you if you hold wheat.",
+                  "Fun fact: The first Ender Dragon was purple.",
+                  "Fun fact: You can smelt cactus into green dye.",
+                  "Fun fact: Omarchy themes never sleep."
+                ]
+                ctx.fillStyle = "#3a3a3a"
+                ctx.font = String(4 * s) + "px Monocraft, monospace"
+                ctx.textAlign = "center"
+                ctx.textBaseline = "top"
+                ctx.fillText(
+                  facts[Math.floor(Date.now() / 6000) % facts.length],
+                  root.noteCx * s, (root.noteY + 13) * s)
+                ctx.textAlign = "left"
+                ctx.textBaseline = "top"
+              }
             }
 
             // Drag ghost follows the cursor (classic slots or menu/app payload).
@@ -2042,14 +2373,38 @@ Item {
                 ctx.fillRect(o.x * s, o.y * s, root.slot * s, root.slot * s)
               }
               if (!it) continue
-              if (it.rows) {
+              var hotDrew = false
+              if (it.iconUrl) {
+                var himg = root.appIconImage(it.iconUrl)
+                if (himg && himg.status === Image.Ready) {
+                  ctx.imageSmoothingEnabled = false
+                  ctx.drawImage(himg,
+                    (o.x + 1) * s, (o.y + 1) * s,
+                    (root.slot - 2) * s, (root.slot - 2) * s)
+                  ctx.imageSmoothingEnabled = true
+                  hotDrew = true
+                }
+              }
+              if (!hotDrew && it.rows) {
                 var iw = it.rows[0].length
                 var ih = it.rows.length
                 root.paintGrid(ctx,
                   (o.x + Math.floor((root.slot - iw) / 2)) * s,
                   (o.y + Math.floor((root.slot - ih) / 2)) * s,
                   s, it.rows, it.colors)
-              } else if (it.name) {
+                hotDrew = true
+              }
+              if (!hotDrew && it.glyph) {
+                ctx.fillStyle = "#e8e8f0"
+                ctx.font = "bold " + String(8 * s) + "px Symbols Nerd Font, Monocraft, monospace"
+                ctx.textAlign = "center"
+                ctx.textBaseline = "middle"
+                ctx.fillText(it.glyph, (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
+                ctx.textAlign = "left"
+                ctx.textBaseline = "top"
+                hotDrew = true
+              }
+              if (!hotDrew && it.name) {
                 ctx.fillStyle = "#e8e8f0"
                 ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
                 ctx.textAlign = "center"
@@ -2115,7 +2470,7 @@ Item {
 
             var y0 = root.menuGridY
             var x0 = root.menuGridX
-            var maxShow = root.menuCols * root.menuRowsMax
+            var show = count
 
             if (count === 0) {
               ctx.fillStyle = "#505050"
@@ -2128,7 +2483,6 @@ Item {
               return
             }
 
-            var show = Math.min(count, maxShow)
             for (var i = 0; i < show; i++) {
               var o = root.menuSlotOrigin(i)
               // Hide the source cell while its payload is being dragged.
@@ -2141,44 +2495,43 @@ Item {
                 }
 
                 if (isApps) {
-                  // Pixel sprite → Omarchy system icon → letter fallback.
                   var a = root.appRows[i]
-                  var spr = a ? root.appSpriteFor(a.name) : null
-                  var pad = 1
-                  var ix = (o.x + pad) * s
-                  var iy = (o.y + pad) * s
-                  var isz = (root.slot - 2 * pad) * s
-                  if (spr && spr.rows) {
+                  var name = a && a.name ? String(a.name) : "?"
+                  var spr = a ? root.appSpriteFor(name) : null
+                  var ip = 1
+                  var ix = (o.x + ip) * s
+                  var iy = (o.y + ip) * s
+                  var isz = (root.slot - 2 * ip) * s
+                  var drew = false
+                  if (a && a.iconUrl) {
+                    var img = root.appIconImage(a.iconUrl)
+                    if (img && img.status === Image.Ready && img.paintedWidth > 0) {
+                      ctx.imageSmoothingEnabled = false
+                      ctx.drawImage(img, ix, iy, isz, isz)
+                      ctx.imageSmoothingEnabled = true
+                      drew = true
+                    }
+                  }
+                  if (!drew && spr && spr.rows) {
                     var siw = spr.rows[0].length
                     var sih = spr.rows.length
                     root.paintGrid(ctx,
                       (o.x + Math.floor((root.slot - siw) / 2)) * s,
                       (o.y + Math.floor((root.slot - sih) / 2)) * s,
                       s, spr.rows, spr.colors)
-                  } else if (a && a.iconUrl) {
-                    var img = root.appIconImage(a.iconUrl)
-                    if (img && img.status === Image.Ready) {
-                      ctx.imageSmoothingEnabled = false
-                      ctx.drawImage(img, ix, iy, isz, isz)
-                      ctx.imageSmoothingEnabled = true
-                    } else {
-                      ctx.fillStyle = "#e8e8f0"
-                      ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
-                      ctx.textAlign = "center"
-                      ctx.textBaseline = "middle"
-                      ctx.fillText(a && a.name ? a.name.charAt(0).toUpperCase() : "?",
-                                   (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
-                    }
-                  } else {
+                    drew = true
+                  }
+                  if (!drew) {
                     ctx.fillStyle = "#e8e8f0"
                     ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
                     ctx.textAlign = "center"
                     ctx.textBaseline = "middle"
-                    var ch = a && a.name ? a.name.charAt(0).toUpperCase() : "?"
-                    ctx.fillText(ch, (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
+                    ctx.fillText(name.charAt(0).toUpperCase() || "?",
+                                 (o.x + root.slot / 2) * s,
+                                 (o.y + root.slot / 2) * s)
+                    ctx.textAlign = "left"
+                    ctx.textBaseline = "top"
                   }
-                  ctx.textAlign = "left"
-                  ctx.textBaseline = "top"
                 } else {
                   var it = root.menuItemAt(i)
                   if (it && it[0]) {
@@ -2202,15 +2555,6 @@ Item {
                   }
                 }
               }
-            }
-
-            // Truncation note
-            if (count > show) {
-              ctx.fillStyle = "#505050"
-              ctx.font = String(6 * s) + "px Monocraft, monospace"
-              ctx.textAlign = "left"
-              ctx.textBaseline = "top"
-              ctx.fillText("+" + (count - show) + " more", x0 * s, (y0 + root.menuRowsMax * root.pitch + 4) * s)
             }
 
             ctx.textAlign = "left"

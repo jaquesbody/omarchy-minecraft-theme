@@ -49,6 +49,30 @@ Item {
     tipVisible = false
   }
 
+  // System icon bitmaps for canvas (cached Image objects; repaint when ready).
+  property var appIconCache: ({})
+  Component {
+    id: appIconComp
+    Image {
+      asynchronous: true
+      smooth: false
+      mipmap: false
+      visible: false
+      sourceSize: Qt.size(32, 32)
+      onStatusChanged: {
+        if (root.opened && status === Image.Ready) hud.requestPaint()
+      }
+    }
+  }
+  function hudIconImage(url) {
+    if (!url || !url.length) return null
+    var img = appIconCache[url]
+    if (img) return img
+    img = appIconComp.createObject(root, { source: url })
+    if (img) appIconCache[url] = img
+    return img
+  }
+
   // --- volume (Pipewire) ---
   readonly property var sink: Pipewire.defaultAudioSink
   PwObjectTracker { objects: root.sink ? [root.sink] : [] }
@@ -487,7 +511,7 @@ Item {
         var ok = true
         for (var i = 0; i < 9; i++) {
           var it = o.items[i]
-          if (it && it.name && it.rows && it.colors && it.cmd) row.push(it)
+          if (it && it.name && it.cmd && (it.rows || it.iconUrl || it.glyph)) row.push(it)
           else { ok = false; break }
         }
         if (ok) {
@@ -562,24 +586,32 @@ Item {
   function paintHeartRow(ctx, hx, y, s, pct) {
     var gw = root.gridHeart[0].length;
     var gh = root.gridHeart.length;
+    // Low-volume jitter: hearts tremble when the system is nearly mute.
+    var jitter = (!root.volumeMuted && root.volumePct > 0 && root.volumePct < 15)
+      ? (Date.now() % 200) / 200 : -1;
     for (var i = 0; i < 10; i++) {
       var fill = root.volumeMuted ? 0
         : Math.max(0, Math.min(1, (pct - i * 10) / 10));
       var ox = hx + i * 8 * s;
+      var oy = y;
+      if (jitter >= 0 && fill >= 0.01) {
+        oy = y + Math.round(Math.sin((jitter + i * 0.17) * Math.PI * 2) * s);
+      }
       if (fill >= 0.999) {
-        root.paintGrid(ctx, ox, y, s, root.gridHeart, root.mapHeart);
+        root.paintGrid(ctx, ox, oy, s, root.gridHeart, root.mapHeart);
       } else if (fill >= 0.5) {
-        root.paintGrid(ctx, ox, y, s, root.gridHeart, root.mapHeartEmpty);
+        root.paintGrid(ctx, ox, oy, s, root.gridHeart, root.mapHeartEmpty);
         ctx.save();
         ctx.beginPath();
-        ctx.rect(ox, y, Math.ceil(gw * s * 0.5), gh * s);
+        ctx.rect(ox, oy, Math.ceil(gw * s * 0.5), gh * s);
         ctx.clip();
-        root.paintGrid(ctx, ox, y, s, root.gridHeart, root.mapHeart);
+        root.paintGrid(ctx, ox, oy, s, root.gridHeart, root.mapHeart);
         ctx.restore();
       } else {
-        root.paintGrid(ctx, ox, y, s, root.gridHeart, root.mapHeartEmpty);
+        root.paintGrid(ctx, ox, oy, s, root.gridHeart, root.mapHeartEmpty);
       }
     }
+    if (jitter >= 0 && root.opened) hud.requestPaint();
   }
 
   function paintHungerRow(ctx, hx, hw, y, s, pct) {
@@ -844,11 +876,33 @@ Item {
             continue
           var gx = hx + (1 + pitch * j) * s
           var gy = hy + 2 * s
-          var iw = item.rows[0].length
-          var ih = item.rows.length
-          var ox = gx + Math.floor((inner - iw) / 2) * s
-          var oy = gy + Math.floor((inner - ih) / 2) * s
-          root.paintGrid(ctx, ox, oy, s, item.rows, item.colors)
+          var drewHud = false
+          if (item.iconUrl) {
+            var himg = root.hudIconImage(item.iconUrl)
+            if (himg && himg.status === Image.Ready) {
+              ctx.imageSmoothingEnabled = false
+              ctx.drawImage(himg, gx, gy, inner * s, inner * s)
+              ctx.imageSmoothingEnabled = true
+              drewHud = true
+            }
+          }
+          if (!drewHud && item.rows) {
+            var iw = item.rows[0].length
+            var ih = item.rows.length
+            var ox = gx + Math.floor((inner - iw) / 2) * s
+            var oy = gy + Math.floor((inner - ih) / 2) * s
+            root.paintGrid(ctx, ox, oy, s, item.rows, item.colors)
+            drewHud = true
+          }
+          if (!drewHud && item.glyph) {
+            ctx.fillStyle = "#e8e8f0"
+            ctx.font = "bold " + String(8 * s) + "px Symbols Nerd Font, Monocraft, monospace"
+            ctx.textAlign = "center"
+            ctx.textBaseline = "middle"
+            ctx.fillText(item.glyph, gx + (inner / 2) * s, gy + (inner / 2) * s)
+            ctx.textAlign = "left"
+            ctx.textBaseline = "top"
+          }
         }
 
         // XP bar (battery); hidden on machines without a battery

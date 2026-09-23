@@ -7,6 +7,10 @@ Item {
   id: root
 
   property bool opened: false
+  property int clickCount: 0
+  property bool herobrine: false
+  onHerobrineChanged: steveFallback.requestPaint()
+
   function open(payload) {
     opened = true
     cursorTimer.start()
@@ -18,6 +22,26 @@ Item {
   }
   // IPC probe for toggle scripts (FLAG files desync across shell restarts).
   function status() { return opened ? "open" : "closed" }
+
+  // Herobrine: after 10 Steve summons, eyes go red for a moment.
+  function onSteveClick() {
+    clickCount++
+    if (clickCount >= 10 && !herobrine) {
+      herobrine = true
+      clickCount = 0
+      herobrineTimer.restart()
+      Quickshell.execDetached([
+        Quickshell.env("HOME") + "/.local/bin/minecraft-toast",
+        "Herobrine",
+        "He was watching..."
+      ])
+    }
+  }
+  Timer {
+    id: herobrineTimer
+    interval: 4000
+    onTriggered: root.herobrine = false
+  }
 
   property int guiScale: 3
   property int anchorX: 0
@@ -129,10 +153,13 @@ Item {
         MouseArea {
           anchors.fill: parent
           hoverEnabled: true
-          onClicked: Quickshell.execDetached([
-            "omarchy-shell", "shell", "summon",
-            "io.github.jaquesbody.minecraft-inventory", "{}"
-          ])
+          onClicked: {
+            root.onSteveClick()
+            Quickshell.execDetached([
+              "omarchy-shell", "shell", "summon",
+              "io.github.jaquesbody.minecraft-inventory", "{}"
+            ])
+          }
         }
 
         // Unmirrored: source frames face/walk toward the right.
@@ -145,12 +172,13 @@ Item {
 
           // Ping-pong walk cycle (green screen removed). Plays only while
           // the cursor moves; freezes on frame 0 when idle.
+          // Hidden during Herobrine so the red-eye fallback canvas shows.
           AnimatedImage {
             id: steveAnim
             anchors.fill: parent
             source: Qt.resolvedUrl("steve.gif")
             sourceSize: Qt.size(panel.steveW, panel.steveH)
-            visible: status === AnimatedImage.Ready
+            visible: !root.herobrine && status === AnimatedImage.Ready
             playing: root.opened && root.animPlay
             fillMode: Image.PreserveAspectFit
             smooth: false
@@ -177,13 +205,13 @@ Item {
             smooth: false
             mipmap: false
             asynchronous: false
-            visible: steveAnim.status !== AnimatedImage.Ready && status === Image.Ready
+            visible: !root.herobrine && steveAnim.status !== AnimatedImage.Ready && status === Image.Ready
           }
 
           Canvas {
             id: steveFallback
             anchors.fill: parent
-            visible: steveAnim.status !== AnimatedImage.Ready && steveImg.status !== Image.Ready
+            visible: root.herobrine || (steveAnim.status !== AnimatedImage.Ready && steveImg.status !== Image.Ready)
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()
             Component.onCompleted: requestPaint()
@@ -193,7 +221,14 @@ Item {
               if (width <= 0 || height <= 0) return
               var s = Math.max(1, Math.floor(width / 14))
               var rows = root.blinking ? root.gridBlink : root.gridOpen
-              root.paintGrid(ctx, 0, 0, s, rows, root.steveMap)
+              var map = {}
+              var srcMap = root.steveMap
+              for (var mk in srcMap) map[mk] = srcMap[mk]
+              if (root.herobrine) {
+                map["E"] = "#ff2020"
+                map["i"] = "#400000"
+              }
+              root.paintGrid(ctx, 0, 0, s, rows, map)
             }
           }
         }
