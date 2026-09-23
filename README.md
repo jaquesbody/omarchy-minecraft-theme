@@ -37,7 +37,6 @@ Idempotent — safe to re-run. Installs theme files, scripts, sounds, cursor,
 all six Quickshell plugins, screensaver art, and keybinds into `~/.config/hypr/bindings.lua`.
 
 First time the theme is turned on, a one-time tip appears above the hotbar: `SUPER+M to toggle hotbar on/off`.
-`SUPER+M to toggle hotbar on/off`.
 
 ## Uninstall
 
