@@ -124,6 +124,7 @@ Item {
     hoveredSlot = -1
     contextSlot = -1
     pinnedSlot = -1
+    steveCrouching = false
     clearDrag()
     hideTip()
   }
@@ -140,6 +141,9 @@ Item {
   // F3 debug overlay + creeper/empty-hotbar key eggs (classic + tabs).
   property bool debugOverlay: false
   property string keyBuf: ""
+  // Steve sneaks while this is true (toggle by clicking his preview well).
+  property bool steveCrouching: false
+  onSteveCrouchingChanged: { if (opened && invCanvas) invCanvas.requestPaint() }
   Timer {
     id: keyBufClear
     interval: 1200
@@ -333,6 +337,7 @@ Item {
         return 0
       })
       appRows = out
+      syncSlotIcons()
       maybeArmorAchievement()
       if (opened && invCanvas) invCanvas.requestPaint()
     } catch (err) {}
@@ -530,16 +535,16 @@ Item {
   readonly property int pitch: 18
   readonly property int cols: 9
   readonly property int mainRows: 3
-  readonly property int craftSlot: 12
-  readonly property int craftPitch: 16
+  readonly property int craftSlot: 16
+  readonly property int craftPitch: 18
   readonly property int armorCols: 1
 
   // y layout (base): tabs 0..tabH, then classic layout shifted by tabH
   readonly property int tabH: 14
   readonly property int titleY: 6 + tabH
   readonly property int topY: 16 + tabH
-  readonly property int craftX: 110
-  readonly property int craftResultX: 154
+  readonly property int craftX: 86
+  readonly property int craftResultX: 136
   readonly property int craftY: 18 + tabH
   // Left column: 4 armor/clothing wells matching the taller character box.
   readonly property int armorX: 8
@@ -558,6 +563,43 @@ Item {
   // Note band: just below the player/armor column, above the main grid.
   readonly property int noteY: armorY + armorColH + 4
   readonly property int noteCx: Math.floor(panelW / 2)
+
+  // Click target: the tall player-preview well (crouch toggle).
+  function hitPlayer(px, py) {
+    return px >= playerX && px < playerX + playerW
+        && py >= playerY && py < playerY + playerH
+  }
+
+  // System icon URLs for classic main/hotbar slots (avoids chunky 9×9 art
+  // when a matching desktop entry icon exists). Keyed by slot index.
+  property var slotIconUrls: ({})
+  function findAppIconUrl(name) {
+    var n = String(name || "").toLowerCase()
+    if (!n.length) return ""
+    var best = ""
+    for (var j = 0; j < appRows.length; j++) {
+      var a = appRows[j]
+      if (!a || !a.iconUrl) continue
+      var an = String(a.name || "").toLowerCase()
+      if (!an.length) continue
+      if (an === n) return a.iconUrl
+      if (!best && (an.indexOf(n) >= 0 || n.indexOf(an) >= 0))
+        best = a.iconUrl
+    }
+    return best
+  }
+  function syncSlotIcons() {
+    var m = {}
+    for (var i = 0; i < slotCount; i++) {
+      var it = slots[i]
+      if (!it || !it.name) continue
+      if (it.iconUrl) { m[i] = it.iconUrl; continue }
+      var u = findAppIconUrl(it.name)
+      if (u) m[i] = u
+    }
+    slotIconUrls = m
+    if (opened && invCanvas) invCanvas.requestPaint()
+  }
 
   // Menu grid rows for the open tab — expand the panel so every item fits
   // (no "+N more" truncation). Cap keeps the panel on a 768px screen.
@@ -825,14 +867,13 @@ Item {
     }
   }
 
-  // Enchant-glint shimmer + fact rotation + F3 idle repaint while open.
+  // Fact rotation + F3 idle repaint while open (classic view keeps the
+  // permanent fun fact cycling even when a hover tip is up).
   Timer {
     id: ambientTimer
     interval: 400
     repeat: true
-    running: root.opened && (root.debugOverlay || root.selectedTab >= 0 ||
-      (root.armorNextThreshold(root.armorTier().tone) !== null &&
-       root.armorNextThreshold(root.armorTier().tone) - root.armorTier().score <= 30))
+    running: root.opened
     onTriggered: { if (root.invCanvas) root.invCanvas.requestPaint() }
   }
 
@@ -1038,7 +1079,10 @@ Item {
     slots = a
     if (opened && invCanvas) invCanvas.requestPaint()
   }
-  Component.onCompleted: hotbarFile.reload()
+  Component.onCompleted: {
+    hotbarFile.reload()
+    appRefreshTimer.start()
+  }
 
   // Omarchy menu root tabs — nerd-font glyphs from omarchy-menu.jsonc icons.
   readonly property var menuTabs: [
@@ -1744,7 +1788,7 @@ Item {
       return { x: craftX + cx * craftPitch, y: craftY + cy * craftPitch }
     }
     if (i === resultIdx)
-      return { x: craftResultX, y: craftY + 8 }
+      return { x: craftResultX, y: craftY + 9 }
     if (i >= mainBase && i < mainBase + 27) {
       var mi = i - mainBase
       var mx = mi % cols
@@ -1929,6 +1973,11 @@ Item {
             root.hoveredSlot = i
             if (label && origin) {
               root.showTip(label, panel.ox + (origin.x + 8) * panel.s, panel.oy + origin.y * panel.s - 4 * panel.s)
+            } else if (root.selectedTab < 0 && root.hitPlayer(bx, by)) {
+              root.showTip(
+                root.steveCrouching ? "Steve (crouched)" : "Steve — click to sneak",
+                panel.ox + (root.playerX + root.playerW / 2) * panel.s,
+                panel.oy + root.playerY * panel.s - 4 * panel.s)
             } else {
               root.hideTip()
             }
@@ -1980,10 +2029,13 @@ Item {
               root.launch(i)
               return
             }
-            if (i >= 0)
+            if (i >= 0) {
               root.launch(i)
-            else
+            } else if (root.selectedTab < 0 && root.hitPlayer(bx, by)) {
+              root.steveCrouching = !root.steveCrouching
+            } else {
               root.pinnedSlot = -1
+            }
           }
         }
 
@@ -2113,10 +2165,10 @@ Item {
             }
             var ro = root.slotOrigin(root.resultIdx)
             drawSlotFrame(ctx, ro.x * s, ro.y * s, root.craftSlot * s, s, false)
-            // Arrow between craft grid and result — vertically centered on
-            // the 2×2 block (block center = craftY+14; arrow visual center
-            // is y+1, so y = craftY+13). Ends before craftResultX.
-            drawArrow(ctx, (root.craftX + 30) * s, (root.craftY + 13) * s, s)
+            // Arrow between craft grid and result — centered on the 2×2
+            // block (block height = craftPitch+craftSlot; visual center
+            // craftY+17 → arrow y = craftY+16). Ends before craftResultX.
+            drawArrow(ctx, (root.craftX + 36) * s, (root.craftY + 16) * s, s)
 
             // Main 3×9
             for (var m = 0; m < 27; m++) {
@@ -2152,8 +2204,9 @@ Item {
               if (!it) continue
 
               var slotDrew = false
-              if (it.iconUrl) {
-                var simg = root.appIconImage(it.iconUrl)
+              var drawUrl = it.iconUrl || root.slotIconUrls[i] || ""
+              if (drawUrl) {
+                var simg = root.appIconImage(drawUrl)
                 if (simg && simg.status === Image.Ready) {
                   ctx.imageSmoothingEnabled = false
                   ctx.drawImage(simg,
@@ -2193,17 +2246,12 @@ Item {
               }
             }
 
-            // Armor wells: durability-style bar under each piece + enchant
-            // glint when the next material tier is close.
+            // Armor wells: durability-style bar under each piece (no
+            // vertical glint — it drew a beige line through the item).
             {
               var atNow = root.armorTier()
               var nextT = root.armorNextThreshold(atNow.tone)
               var prevT = root.armorPrevThreshold(atNow.tone)
-              var nearGlint = false
-              if (nextT !== null && nextT - atNow.score <= 30)
-                nearGlint = true
-              var glintPhase = nearGlint
-                ? (Date.now() % 800) / 800 : -1
               for (var aw = 0; aw < 4; aw++) {
                 var ao2 = root.slotOrigin(root.armorBase + aw)
                 var barX = ao2.x
@@ -2219,11 +2267,6 @@ Item {
                   prog = 1
                 ctx.fillStyle = nextT === null ? "#5decd7" : "#80ff20"
                 ctx.fillRect(barX * s, barY * s, Math.round(barW * prog) * s, barH * s)
-                if (nearGlint && glintPhase >= 0) {
-                  var gx = ao2.x + Math.floor(prog * barW * glintPhase)
-                  ctx.fillStyle = "rgba(255, 255, 160, 0.85)"
-                  ctx.fillRect(gx * s, (ao2.y - 1) * s, Math.max(s, 2 * s), (root.armorSlot + 3) * s)
-                }
               }
             }
 
@@ -2304,27 +2347,43 @@ Item {
               ctx.textBaseline = "top"
             }
 
-            // Empty craft → rotating fun facts (easter egg).
+            // Empty craft → rotating fun facts (permanent; always drawn
+            // so a hover tooltip can't blank the line).
             if (!root.debugOverlay && root.selectedTab < 0) {
-              var srcC = root.suggestSrc
-              if (srcC < 0) {
-                var facts = [
-                  "Fun fact: Minecraft has over 300 million copies sold.",
-                  "Fun fact: Monocraft is an open pixel font.",
-                  "Fun fact: Cows will follow you if you hold wheat.",
-                  "Fun fact: The first Ender Dragon was purple.",
-                  "Fun fact: You can smelt cactus into green dye.",
-                  "Fun fact: Omarchy themes never sleep."
-                ]
+              var facts = [
+                "Fun fact: Minecraft has over 300 million copies sold.",
+                "Fun fact: Monocraft is an open pixel font.",
+                "Fun fact: Cows will follow you if you hold wheat.",
+                "Fun fact: The first Ender Dragon was purple.",
+                "Fun fact: You can smelt cactus into green dye.",
+                "Fun fact: Omarchy themes never sleep."
+              ]
+              ctx.fillStyle = "#3a3a3a"
+              ctx.font = String(4 * s) + "px Monocraft, monospace"
+              ctx.textAlign = "center"
+              ctx.textBaseline = "top"
+              ctx.fillText(
+                facts[Math.floor(Date.now() / 6000) % facts.length],
+                root.noteCx * s, (root.noteY + 13) * s)
+              ctx.textAlign = "left"
+              ctx.textBaseline = "top"
+            }
+
+            // Suggested 4 apps listed under the craft boxes when a source
+            // is hovered/pinned (room between craft block and note band).
+            if (root.selectedTab < 0 && root.suggestSrc >= 0) {
+              var sugList = root.suggestionsFor(root.suggestSrc)
+              if (sugList.length) {
                 ctx.fillStyle = "#3a3a3a"
                 ctx.font = String(4 * s) + "px Monocraft, monospace"
-                ctx.textAlign = "center"
-                ctx.textBaseline = "top"
-                ctx.fillText(
-                  facts[Math.floor(Date.now() / 6000) % facts.length],
-                  root.noteCx * s, (root.noteY + 13) * s)
                 ctx.textAlign = "left"
                 ctx.textBaseline = "top"
+                var sugY0 = root.craftY + 2 * root.craftPitch + 2
+                for (var sg = 0; sg < sugList.length && sg < 4; sg++) {
+                  ctx.fillText(
+                    "· " + String(sugList[sg].name || ""),
+                    root.craftX * s, (sugY0 + sg * 5) * s)
+                }
               }
             }
 
@@ -2374,8 +2433,9 @@ Item {
               }
               if (!it) continue
               var hotDrew = false
-              if (it.iconUrl) {
-                var himg = root.appIconImage(it.iconUrl)
+              var hotUrl = it.iconUrl || root.slotIconUrls[i] || ""
+              if (hotUrl) {
+                var himg = root.appIconImage(hotUrl)
                 if (himg && himg.status === Image.Ready) {
                   ctx.imageSmoothingEnabled = false
                   ctx.drawImage(himg,
@@ -2590,54 +2650,68 @@ Item {
 
           function drawPlayer(ctx, x, y, s) {
             // Detailed Steve preview — full pixel figure (16×26 units).
+            // Crouch: shift the body down and compress the legs (sneak pose).
+            // Armor tiers recolor tee / jeans / shoes to match the wells.
+            var crouch = root.steveCrouching
+            var dy = crouch ? 3 * s : 0
+            var legTop = y + (crouch ? 21 : 18) * s
+            var legH = (crouch ? 5 : 8) * s
+            var tone = root.armorTier().tone
+            var pal = root.armorTierPalettes[tone]
+            var tee = tone ? pal[0] : "#8ecff0"
+            var teeDark = tone ? pal[1] : "#5a9ec9"
+            var jeans = tone ? pal[0] : "#4a3fa0"
+            var jeansDark = tone ? pal[1] : "#3a3080"
+            var shoes = tone ? pal[1] : "#6b4420"
             // head
             ctx.fillStyle = "#3a2a1a"
-            ctx.fillRect(x + 4 * s, y, 8 * s, 8 * s)
+            ctx.fillRect(x + 4 * s, y + dy, 8 * s, 8 * s)
             ctx.fillStyle = "#c8a27a"
-            ctx.fillRect(x + 5 * s, y + 2 * s, 6 * s, 6 * s)
+            ctx.fillRect(x + 5 * s, y + 2 * s + dy, 6 * s, 6 * s)
             // hair fringe
             ctx.fillStyle = "#3a2a1a"
-            ctx.fillRect(x + 5 * s, y + 2 * s, 6 * s, 1 * s)
-            ctx.fillRect(x + 4 * s, y, 8 * s, 2 * s)
+            ctx.fillRect(x + 5 * s, y + 2 * s + dy, 6 * s, 1 * s)
+            ctx.fillRect(x + 4 * s, y + dy, 8 * s, 2 * s)
             // eyes (white + pupil)
             ctx.fillStyle = "#ffffff"
-            ctx.fillRect(x + 5 * s, y + 4 * s, 2 * s, 2 * s)
-            ctx.fillRect(x + 9 * s, y + 4 * s, 2 * s, 2 * s)
+            ctx.fillRect(x + 5 * s, y + 4 * s + dy, 2 * s, 2 * s)
+            ctx.fillRect(x + 9 * s, y + 4 * s + dy, 2 * s, 2 * s)
             ctx.fillStyle = "#3b5dc9"
-            ctx.fillRect(x + 6 * s, y + 4 * s, 1 * s, 2 * s)
-            ctx.fillRect(x + 9 * s, y + 4 * s, 1 * s, 2 * s)
+            ctx.fillRect(x + 6 * s, y + 4 * s + dy, 1 * s, 2 * s)
+            ctx.fillRect(x + 9 * s, y + 4 * s + dy, 1 * s, 2 * s)
             // nose shadow / mouth
             ctx.fillStyle = "#b88860"
-            ctx.fillRect(x + 7 * s, y + 6 * s, 2 * s, 1 * s)
+            ctx.fillRect(x + 7 * s, y + 6 * s + dy, 2 * s, 1 * s)
             ctx.fillStyle = "#8a6040"
-            ctx.fillRect(x + 6 * s, y + 7 * s, 4 * s, 1 * s)
-            // torso (light-blue tee with shading)
-            ctx.fillStyle = "#8ecff0"
-            ctx.fillRect(x + 4 * s, y + 8 * s, 8 * s, 10 * s)
-            ctx.fillStyle = "#5a9ec9"
-            ctx.fillRect(x + 4 * s, y + 8 * s, 8 * s, 2 * s)
-            ctx.fillRect(x + 4 * s, y + 16 * s, 8 * s, 2 * s)
+            ctx.fillRect(x + 6 * s, y + 7 * s + dy, 4 * s, 1 * s)
+            // torso (tee with shading — armor palette when leveled)
+            ctx.fillStyle = tee
+            ctx.fillRect(x + 4 * s, y + 8 * s + dy, 8 * s, legTop - (y + 8 * s + dy))
+            ctx.fillStyle = teeDark
+            ctx.fillRect(x + 4 * s, y + 8 * s + dy, 8 * s, 2 * s)
+            ctx.fillRect(x + 4 * s, legTop - 2 * s, 8 * s, 2 * s)
             // sleeves
-            ctx.fillStyle = "#8ecff0"
-            ctx.fillRect(x + 4 * s, y + 8 * s, 2 * s, 4 * s)
-            ctx.fillRect(x + 10 * s, y + 8 * s, 2 * s, 4 * s)
+            ctx.fillStyle = tee
+            ctx.fillRect(x + 4 * s, y + 8 * s + dy, 2 * s, 4 * s)
+            ctx.fillRect(x + 10 * s, y + 8 * s + dy, 2 * s, 4 * s)
             // arms (skin)
             ctx.fillStyle = "#c8a27a"
-            ctx.fillRect(x + 4 * s, y + 12 * s, 2 * s, 6 * s)
-            ctx.fillRect(x + 10 * s, y + 12 * s, 2 * s, 6 * s)
+            var armH = Math.max(s, legTop - (y + 12 * s + dy))
+            ctx.fillRect(x + 4 * s, y + 12 * s + dy, 2 * s, armH)
+            ctx.fillRect(x + 10 * s, y + 12 * s + dy, 2 * s, armH)
             ctx.fillStyle = "#b88860"
-            ctx.fillRect(x + 4 * s, y + 16 * s, 2 * s, 2 * s)
-            ctx.fillRect(x + 10 * s, y + 16 * s, 2 * s, 2 * s)
-            // legs (purple jeans with seam)
-            ctx.fillStyle = "#4a3fa0"
-            ctx.fillRect(x + 4 * s, y + 18 * s, 4 * s, 8 * s)
-            ctx.fillRect(x + 8 * s, y + 18 * s, 4 * s, 8 * s)
-            ctx.fillStyle = "#3a3080"
-            ctx.fillRect(x + 7 * s, y + 18 * s, 2 * s, 8 * s)
+            ctx.fillRect(x + 4 * s, legTop - 2 * s, 2 * s, 2 * s)
+            ctx.fillRect(x + 10 * s, legTop - 2 * s, 2 * s, 2 * s)
+            // legs (jeans with seam)
+            ctx.fillStyle = jeans
+            ctx.fillRect(x + 4 * s, legTop, 4 * s, legH)
+            ctx.fillRect(x + 8 * s, legTop, 4 * s, legH)
+            ctx.fillStyle = jeansDark
+            ctx.fillRect(x + 7 * s, legTop, 2 * s, legH)
             // shoes
-            ctx.fillStyle = "#6b4420"
-            ctx.fillRect(x + 4 * s, y + 24 * s, 4 * s, 2 * s)
-            ctx.fillRect(x + 8 * s, y + 24 * s, 4 * s, 2 * s)
+            ctx.fillStyle = shoes
+            ctx.fillRect(x + 4 * s, legTop + legH - 2 * s, 4 * s, 2 * s)
+            ctx.fillRect(x + 8 * s, legTop + legH - 2 * s, 4 * s, 2 * s)
           }
         }
       }
