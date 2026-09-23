@@ -1,0 +1,96 @@
+# Minecraft Theme for btop
+# Obsidian background, stone panels, ore-colored graphs
+
+# Main background (obsidian)
+theme[main_bg]="#191622"
+
+# Main text (stone grey)
+theme[main_fg]="#C6C6C6"
+
+# Title color for boxes
+theme[title]="#55FF55"
+
+# Highlight color for keyboard shortcuts
+theme[hi_fg]="#FFFF55"
+
+# Background color of selected item in processes box
+theme[selected_bg]="#375231"
+
+# Foreground color of selected item in processes box
+theme[selected_fg]="#55FF55"
+
+# Color of inactive/disabled text
+theme[inactive_fg]="#555555"
+
+# Color of text appearing on top of graphs
+theme[graph_text]="#C6C6C6"
+
+# Background color of the percentage meters
+theme[meter_bg]="#2A2438"
+
+# Misc colors for processes box
+theme[proc_misc]="#55FFFF"
+
+# CPU, Memory, Network, Proc box outline colors (stone bevel)
+theme[cpu_box]="#555555"
+theme[mem_box]="#555555"
+theme[net_box]="#555555"
+theme[proc_box]="#555555"
+
+# Box divider line and small boxes line color
+theme[div_line]="#2A2438"
+
+# Temperature graph color (Green -> Yellow -> Red)
+theme[temp_start]="#55FF55"
+theme[temp_mid]="#FFFF55"
+theme[temp_end]="#FF5555"
+
+# CPU graph colors (Diamond cyan -> Lapis blue -> Magenta)
+theme[cpu_start]="#55FFFF"
+theme[cpu_mid]="#5555FF"
+theme[cpu_end]="#FF55FF"
+
+# Mem/Disk free meter (Grass green -> Diamond -> Lapis)
+theme[free_start]="#55FF55"
+theme[free_mid]="#55FFFF"
+theme[free_end]="#5555FF"
+
+# Mem/Disk cached meter (Gold -> Orange -> Redstone)
+theme[cached_start]="#FFFF55"
+theme[cached_mid]="#FFAA00"
+theme[cached_end]="#FF5555"
+
+# Mem/Disk available meter (Lapis -> Diamond -> Grass)
+theme[available_start]="#5555FF"
+theme[available_mid]="#55FFFF"
+theme[available_end]="#55FF55"
+
+# Mem/Disk used meter (Redstone -> Dark red -> Stone)
+theme[used_start]="#FF5555"
+theme[used_mid]="#AA0000"
+theme[used_end]="#555555"
+
+# Download graph colors (Diamond -> Lapis -> Magenta)
+theme[download_start]="#55FFFF"
+theme[download_mid]="#5555FF"
+theme[download_end]="#FF55FF"
+
+# Upload graph colors (Grass -> Gold -> Orange)
+theme[upload_start]="#55FF55"
+theme[upload_mid]="#FFFF55"
+theme[upload_end]="#FFAA00"
+
+# Process box color gradient
+theme[process_start]="#55FF55"
+theme[process_mid]="#55FFFF"
+theme[process_end]="#5555FF"
+
+# Graph gradient colors (obsidian -> stone -> white)
+theme[gradient_color_0]="#191622"
+theme[gradient_color_1]="#2A2438"
+theme[gradient_color_2]="#375231"
+theme[gradient_color_3]="#555555"
+theme[gradient_color_4]="#55FF55"
+theme[gradient_color_5]="#C6C6C6"
+theme[gradient_color_6]="#DCDCDC"
+theme[gradient_color_7]="#FFFFFF"

@@ -1,0 +1,38 @@
+#!/bin/bash
+# Minecraft Inventory panel toggle — bound to SUPER+E.
+# Talks to the Quickshell plugin via omarchy-shell IPC.
+set -euo pipefail
+
+export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+PLUGIN_ID="io.github.jaquesbody.minecraft-inventory"
+STATE_DIR="$HOME/.local/state/minecraft-theme"
+mkdir -p "$STATE_DIR"
+FLAG="$STATE_DIR/inventory-active"
+
+case "${1:-toggle}" in
+  show)
+    omarchy-shell shell summon "$PLUGIN_ID" '{}'
+    touch "$FLAG"
+    [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound open || true
+    ;;
+  hide)
+    omarchy-shell shell hide "$PLUGIN_ID"
+    rm -f "$FLAG"
+    [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound close || true
+    ;;
+  toggle)
+    was=$( [ -f "$FLAG" ] && echo 1 || echo 0 )
+    omarchy-shell shell toggle "$PLUGIN_ID" '{}'
+    if [ -f "$FLAG" ]; then rm -f "$FLAG"; else touch "$FLAG"; fi
+    if [ -x "$HOME/.local/bin/minecraft-sound" ]; then
+      if [ "$was" = "1" ]; then minecraft-sound close; else minecraft-sound open; fi
+    fi
+    ;;
+  status)
+    if [ -f "$FLAG" ]; then echo "on"; else echo "off"; fi
+    ;;
+  *)
+    echo "Usage: minecraft-inventory [toggle|show|hide|status]"
+    exit 1
+    ;;
+esac

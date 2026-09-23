@@ -1,0 +1,26 @@
+#!/bin/bash
+# Show a Minecraft-style toast. Auto-hides inside the plugin.
+# Usage: minecraft-toast ["title" "subtitle"]   or   minecraft-toast   (default)
+set -euo pipefail
+
+export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+PLUGIN_ID="io.github.jaquesbody.minecraft-toast"
+
+if [ "$#" -ge 2 ]; then
+  title="$1"
+  subtitle="$2"
+elif [ "$#" -eq 1 ]; then
+  title="$1"
+  subtitle=""
+else
+  title="Advancement Made!"
+  subtitle="Minecraft theme"
+fi
+
+# Minimal JSON escape for quotes/backslashes/newlines
+json_escape() {
+  printf '%s' "$1" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
+}
+
+payload=$(printf '{"title":%s,"subtitle":%s}' "$(json_escape "$title")" "$(json_escape "$subtitle")")
+omarchy-shell shell summon "$PLUGIN_ID" "$payload"

@@ -1,0 +1,6 @@
+[General]
+resize_algorithm = "nearest"
+nominal_size = 1.0
+define_override = "default;arrow;pointer;left_ptr;top_left_arrow;left-arrow"
+hotspot_x = 0.0
+hotspot_y = 0.0

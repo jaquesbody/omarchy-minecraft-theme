@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.jaquesbody.minecraft-toast",
+  "name": "Minecraft Toast",
+  "version": "1.0.0",
+  "author": "jaquesbody",
+  "license": "MIT",
+  "description": "Minecraft-style advancement toast notifications. Summon with title/subtitle payload.",
+  "kinds": [
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "panel": "Toast.qml"
+  }
+}

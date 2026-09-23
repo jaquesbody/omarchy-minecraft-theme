@@ -1,0 +1,22 @@
+#!/bin/bash
+# Play a minecraft-theme sound. All WAVs are original procedural audio.
+# Usage: minecraft-sound [click|open|close|toast|death]
+set -euo pipefail
+
+SOUND_DIR="$HOME/.local/share/minecraft-theme/sounds"
+name="${1:-click}"
+
+case "$name" in
+  click|open|close|toast|death) ;;
+  *) echo "Unknown sound: $name (click|open|close|toast|death)"; exit 1 ;;
+esac
+
+f="$SOUND_DIR/$name.wav"
+if [ ! -f "$f" ]; then
+  echo "Missing sound: $f" >&2
+  exit 1
+fi
+
+# Fire-and-forget so keybinds never block on audio.
+pw-play "$f" >/dev/null 2>&1 &
+disown 2>/dev/null || true

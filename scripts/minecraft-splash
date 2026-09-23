@@ -1,0 +1,17 @@
+#!/bin/bash
+# Show yellow title-screen splash text (auto-hides).
+# Usage: minecraft-splash ["custom text"]
+set -euo pipefail
+
+export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+PLUGIN_ID="io.github.jaquesbody.minecraft-splash"
+
+if [ "$#" -ge 1 ]; then
+  text="$1"
+  json_text=$(printf '%s' "$text" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+  payload="{\"text\":$json_text}"
+else
+  payload="{}"
+fi
+
+omarchy-shell shell summon "$PLUGIN_ID" "$payload"

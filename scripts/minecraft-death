@@ -1,0 +1,36 @@
+#!/bin/bash
+# Minecraft death-screen power menu toggle — bound to SUPER+SHIFT+D.
+set -euo pipefail
+
+export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+PLUGIN_ID="io.github.jaquesbody.minecraft-death"
+STATE_DIR="$HOME/.local/state/minecraft-theme"
+mkdir -p "$STATE_DIR"
+FLAG="$STATE_DIR/death-active"
+
+case "${1:-toggle}" in
+  show)
+    omarchy-shell shell summon "$PLUGIN_ID" '{}'
+    touch "$FLAG"
+    ;;
+  hide)
+    omarchy-shell shell hide "$PLUGIN_ID"
+    rm -f "$FLAG"
+    ;;
+  toggle)
+    was=$( [ -f "$FLAG" ] && echo 1 || echo 0 )
+    omarchy-shell shell toggle "$PLUGIN_ID" '{}'
+    if [ -f "$FLAG" ]; then rm -f "$FLAG"; else touch "$FLAG"; fi
+    # Death sting plays inside the plugin on open; only click on close.
+    if [ "$was" = "1" ] && [ -x "$HOME/.local/bin/minecraft-sound" ]; then
+      minecraft-sound click
+    fi
+    ;;
+  status)
+    if [ -f "$FLAG" ]; then echo "on"; else echo "off"; fi
+    ;;
+  *)
+    echo "Usage: minecraft-death [toggle|show|hide|status]"
+    exit 1
+    ;;
+esac

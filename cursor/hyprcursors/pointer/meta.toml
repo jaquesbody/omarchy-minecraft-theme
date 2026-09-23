@@ -1,0 +1,6 @@
+[General]
+resize_algorithm = "nearest"
+nominal_size = 1.0
+define_override = "hand2;hand1;grab;pointer;pointing_hand;link"
+hotspot_x = 0.3
+hotspot_y = 0.1

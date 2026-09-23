@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.jaquesbody.minecraft-steve",
+  "name": "Minecraft Steve",
+  "version": "1.0.0",
+  "author": "jaquesbody",
+  "license": "MIT",
+  "description": "Floating blocky companion character with idle blink. Toggle with SUPER+SHIFT+S.",
+  "kinds": [
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "panel": "Steve.qml"
+  }
+}

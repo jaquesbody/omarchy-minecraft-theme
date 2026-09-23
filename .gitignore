@@ -1,0 +1,18 @@
+# User-supplied assets — never committed
+assets/user/*
+!assets/user/.gitkeep
+
+# User-supplied wallpapers — never committed
+theme/backgrounds/*
+!theme/backgrounds/.gitkeep
+
+# OS noise
+.DS_Store
+*.swp
+
+# Local milestone status (keep README/CREDITS public-facing)
+M*-STATUS.md
+
+# Never commit session secrets
+opencode.json
+.opencode/

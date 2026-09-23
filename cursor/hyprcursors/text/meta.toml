@@ -1,0 +1,6 @@
+[General]
+resize_algorithm = "nearest"
+nominal_size = 1.0
+define_override = "text;ibeam;xterm"
+hotspot_x = 0.5
+hotspot_y = 0.5

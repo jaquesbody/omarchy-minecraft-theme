@@ -1,0 +1,144 @@
+#!/bin/bash
+# Minecraft Theme toggle for Omarchy — bound to SUPER+M
+# Applies the "minecraft" theme + Monocraft font (and a shell base-size that
+# compensates for Monocraft's smaller Nerd glyphs), or restores the previous
+# theme, font, and text size.
+set -euo pipefail
+
+THEME_NAME="minecraft"
+MINECRAFT_FONT="Monocraft"
+DEFAULT_FONT="JetBrainsMono Nerd Font"
+# Monocraft Nerd paints ~30% smaller than JetBrains at the same px; base 18
+# scales bar icon-font to ~20 so status icons visually match Tokyo Night at base 10.
+MINECRAFT_BASE_SIZE=18
+STATE_DIR="$HOME/.local/state/minecraft-theme"
+PREV_FILE="$STATE_DIR/previous-theme"
+PREV_FONT_FILE="$STATE_DIR/previous-font"
+PREV_BASE_FILE="$STATE_DIR/previous-base-size"
+USER_SHELL_TOML="$HOME/.config/omarchy/shell.toml"
+BIN_MCSPLASH="$HOME/.local/bin/minecraft-splash"
+BIN_MCTOAST="$HOME/.local/bin/minecraft-toast"
+mkdir -p "$STATE_DIR"
+
+current_name() {
+  cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null || echo ""
+}
+
+current_font() {
+  omarchy font current 2>/dev/null || echo ""
+}
+
+set_font() {
+  local want="$1"
+  local have
+  [ -n "$want" ] || return 0
+  have="$(current_font)"
+  if [ "$have" != "$want" ]; then
+    omarchy font set "$want" >/dev/null 2>&1 || true
+  fi
+}
+
+get_base_size() {
+  # Print [font] base-size from user shell.toml, or empty if unset.
+  [ -f "$USER_SHELL_TOML" ] || return 0
+  awk '
+    /^[[:space:]]*\[/ { in_font = ($0 ~ /^[[:space:]]*\[font\]([[:space:]]|$)/); next }
+    in_font && /^[[:space:]]*base-size[[:space:]]*=/ {
+      v = $0
+      sub(/^[^=]*=[[:space:]]*/, "", v)
+      sub(/[[:space:]]*(#.*)?$/, "", v)
+      print v
+      exit
+    }
+  ' "$USER_SHELL_TOML"
+}
+
+set_base_size() {
+  # Upsert or (if $1 empty) remove [font] base-size in user shell.toml.
+  # The shell watches this file, so a change re-flows live.
+  local val="${1:-}"
+  local tmp
+  tmp=$(mktemp)
+  if [ ! -f "$USER_SHELL_TOML" ]; then
+    if [ -n "$val" ]; then
+      printf '[font]\nbase-size = %s\n' "$val" >"$USER_SHELL_TOML"
+    fi
+    rm -f "$tmp"
+    return 0
+  fi
+  if [ -z "$val" ]; then
+    # Drop the base-size line only (leave any other user keys).
+    awk '
+      /^[[:space:]]*\[/ { in_font = ($0 ~ /^[[:space:]]*\[font\]([[:space:]]|$)/); print; next }
+      in_font && /^[[:space:]]*base-size[[:space:]]*=/ { next }
+      { print }
+    ' "$USER_SHELL_TOML" >"$tmp"
+  else
+    awk -v n="$val" '
+      BEGIN { done = 0 }
+      /^[[:space:]]*\[/ { in_font = ($0 ~ /^[[:space:]]*\[font\]([[:space:]]|$)/); print; next }
+      in_font && /^[[:space:]]*base-size[[:space:]]*=/ {
+        print "base-size = " n
+        done = 1
+        next
+      }
+      { print }
+      END {
+        if (!done) {
+          # No [font] section or no base-size key — ensure section exists.
+        }
+      }
+    ' "$USER_SHELL_TOML" >"$tmp"
+    # If there was no base-size key at all, append under [font] or create it.
+    if ! grep -qE '^[[:space:]]*base-size[[:space:]]*=' "$tmp"; then
+      if grep -qE '^[[:space:]]*\[font\]' "$tmp"; then
+        awk -v n="$val" '
+          { print }
+          /^[[:space:]]*\[font\]/ && !done { print "base-size = " n; done = 1 }
+        ' "$tmp" >"$tmp.2" && mv "$tmp.2" "$tmp"
+      else
+        printf '\n[font]\nbase-size = %s\n' "$val" >>"$tmp"
+      fi
+    fi
+  fi
+  mv "$tmp" "$USER_SHELL_TOML"
+}
+
+current="$(current_name)"
+
+if [ "$current" = "$THEME_NAME" ]; then
+  # Minecraft is active -> restore previous theme, font, and text size
+  prev=""
+  [ -f "$PREV_FILE" ] && prev=$(cat "$PREV_FILE")
+  if [ -z "$prev" ] || [ "$prev" = "$THEME_NAME" ]; then
+    omarchy-notification-send "Minecraft theme" -b "No previous theme recorded; use omarchy theme list" || true
+    exit 0
+  fi
+  omarchy-theme-set "$prev"
+  # Font is sticky (Monocraft stays after the first ON): restoring JBM costs
+  # ~5s + shell restart, which made every toggle ~8s. base-size still restores
+  # so type scale matches the previous theme. To get JBM back manually:
+  #   omarchy font set "JetBrainsMono Nerd Font"
+  prev_base=""
+  [ -f "$PREV_BASE_FILE" ] && prev_base=$(cat "$PREV_BASE_FILE")
+  set_base_size "$prev_base"
+  # Hide the HUD overlay when leaving the Minecraft theme.
+  if [ -f "$STATE_DIR/overlay-active" ]; then
+    "$HOME/.local/bin/minecraft-hotbar" hide || true
+  fi
+else
+  # Minecraft is not active -> save current theme/font/text size and switch
+  if [ -n "$current" ]; then
+    echo "$current" >"$PREV_FILE"
+  fi
+  echo "$(current_font)" >"$PREV_FONT_FILE"
+  echo "$(get_base_size)" >"$PREV_BASE_FILE"
+  set_base_size "$MINECRAFT_BASE_SIZE"
+  omarchy-theme-set "$THEME_NAME"
+  # No-op when Monocraft is already active (sticky after first ON) — the
+  # full omarchy font set costs ~5s + a shell restart.
+  set_font "$MINECRAFT_FONT"
+  # Splash + toast celebrate entering the Minecraft theme.
+  if [ -x "$BIN_MCSPLASH" ]; then "$BIN_MCSPLASH" || true; fi
+  if [ -x "$BIN_MCTOAST" ]; then "$BIN_MCTOAST" "Theme Applied" "minecraft" || true; fi
+fi

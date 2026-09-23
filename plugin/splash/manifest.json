@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.jaquesbody.minecraft-splash",
+  "name": "Minecraft Splash",
+  "version": "1.0.0",
+  "author": "jaquesbody",
+  "license": "MIT",
+  "description": "Yellow title-screen style splash text. Summon with optional text payload; auto-hides.",
+  "kinds": [
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "panel": "Splash.qml"
+  }
+}

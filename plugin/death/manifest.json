@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.jaquesbody.minecraft-death",
+  "name": "Minecraft Death Screen",
+  "version": "1.0.0",
+  "author": "jaquesbody",
+  "license": "MIT",
+  "description": "You Died! full-screen overlay doubling as a power menu. Toggle with SUPER+SHIFT+D.",
+  "kinds": [
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "panel": "Death.qml"
+  }
+}

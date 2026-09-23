@@ -1,0 +1,47 @@
+#!/bin/bash
+# Minecraft HUD (hotbar + hearts + XP) toggle — bound to SUPER+H.
+# Talks to the Quickshell plugin via omarchy-shell IPC.
+set -euo pipefail
+
+export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+PLUGIN_ID="io.github.jaquesbody.minecraft-hud"
+STATE_DIR="$HOME/.local/state/minecraft-theme"
+mkdir -p "$STATE_DIR"
+FLAG="$STATE_DIR/overlay-active"
+
+case "${1:-toggle}" in
+  show)
+    omarchy-shell shell summon "$PLUGIN_ID" '{}'
+    touch "$FLAG"
+    [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound open || true
+    ;;
+  hide)
+    omarchy-shell shell hide "$PLUGIN_ID"
+    rm -f "$FLAG"
+    [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound close || true
+    ;;
+  toggle)
+    was=$( [ -f "$FLAG" ] && echo 1 || echo 0 )
+    omarchy-shell shell toggle "$PLUGIN_ID" '{}'
+    if [ -f "$FLAG" ]; then rm -f "$FLAG"; else touch "$FLAG"; fi
+    if [ -x "$HOME/.local/bin/minecraft-sound" ]; then
+      if [ "$was" = "1" ]; then minecraft-sound close; else minecraft-sound open; fi
+    fi
+    ;;
+  select)
+    # select <0-8> — open/re-summon the HUD with a hotbar slot selected.
+    slot="${2:-0}"
+    case "$slot" in
+      ''|*[!0-8]*) echo "slot must be 0-8"; exit 1 ;;
+    esac
+    omarchy-shell shell summon "$PLUGIN_ID" "{\"slot\": $slot}"
+    touch "$FLAG"
+    ;;
+  status)
+    if [ -f "$FLAG" ]; then echo "on"; else echo "off"; fi
+    ;;
+  *)
+    echo "Usage: minecraft-hotbar [toggle|show|hide|status|select <0-8>]"
+    exit 1
+    ;;
+esac

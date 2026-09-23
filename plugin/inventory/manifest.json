@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.jaquesbody.minecraft-inventory",
+  "name": "Minecraft Inventory",
+  "version": "1.0.0",
+  "author": "jaquesbody",
+  "license": "MIT",
+  "description": "Minecraft-style inventory panel with app launchers. Toggle with SUPER+E.",
+  "kinds": [
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "panel": "Inventory.qml"
+  }
+}

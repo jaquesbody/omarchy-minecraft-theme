@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.jaquesbody.minecraft-hud",
+  "name": "Minecraft HUD",
+  "version": "1.0.0",
+  "author": "jaquesbody",
+  "license": "MIT",
+  "description": "Minecraft-style hotbar, hearts, hunger and XP bar overlay. Toggle with SUPER+H.",
+  "kinds": [
+    "panel"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "panel": "Hud.qml"
+  }
+}

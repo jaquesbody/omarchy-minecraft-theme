@@ -1,0 +1,145 @@
+# Minecraft Theme — Omarchy shell UI
+# Classic GUI: light grey (#C6C6C6) bevelled panels, dark borders,
+# dark-purple item tooltips, XP-green accents.
+
+[bar]
+background       = "#C6C6C6"
+background-alpha = 1.0
+text             = "#404040"
+active           = "#55FF55"
+# Scale bar chrome with [font] base-size. The toggle raises base-size to 18
+# while Minecraft is on so Monocraft's smaller Nerd glyphs match JetBrains
+# icon size at the default 10px; at base 18 these keep the bar ~32px tall.
+scale-with-font  = true
+size-horizontal  = 21
+size-vertical    = 21
+
+[hyprland]
+active-border            = "#55FF55"
+active-border-foreground = "#C6C6C6"
+
+[controls]
+normal-color        = "#404040"
+normal-fill-alpha   = 0.0
+normal-border       = "#555555"
+normal-border-width = 2
+normal-border-alpha = 1.0
+
+hover-cursor-color        = "#55FF55"
+hover-cursor-fill-alpha   = 0.12
+hover-cursor-border       = "#55FF55"
+hover-cursor-border-width = 2
+hover-cursor-border-alpha = 1.0
+
+focus-color        = "#55FF55"
+focus-fill-alpha   = 0.12
+focus-border       = "#55FF55"
+focus-border-width = 2
+focus-border-alpha = 1.0
+
+selected-color        = "#404040"
+selected-fill-alpha   = 0.20
+selected-border       = "#55FF55"
+selected-border-width = 2
+selected-border-alpha = 1.0
+
+pressed-fill-alpha   = 0.35
+selection-fill-alpha = 0.45
+
+[spacing]
+scale = 1.0
+scale-with-font = true
+
+[font]
+base-size = 18
+
+[popups]
+background       = "#C6C6C6"
+background-alpha = 1.0
+text             = "#404040"
+border           = "#555555"
+border-alpha     = 1.0
+border-width     = 3
+
+[tooltip]
+background       = "#100010"
+background-alpha = 0.97
+text             = "#FFFF55"
+border           = "#5555FF"
+border-alpha     = 1.0
+border-width     = 2
+
+[notifications]
+background       = "#C6C6C6"
+background-alpha = 1.0
+text             = "#404040"
+border           = "#55FF55"
+border-alpha     = 1.0
+border-width     = 2
+countdown        = "#55FF55"
+
+[launcher]
+background                = "#C6C6C6"
+background-alpha          = 0.97
+text                      = "#404040"
+border                    = "#555555"
+border-alpha              = 1.0
+border-width              = 3
+scrim                     = "#000000"
+scrim-alpha               = 0.5
+selected-background       = "#55FF55"
+selected-background-alpha = 0.30
+selected-text             = "#404040"
+selected-border           = "#55FF55"
+selected-border-alpha     = 1.0
+
+[menu]
+background                = "#C6C6C6"
+background-alpha          = 0.97
+text                      = "#404040"
+border                    = "#555555"
+border-alpha              = 1.0
+border-width              = 3
+scrim                     = "#000000"
+scrim-alpha               = 0.5
+selected-background       = "#55FF55"
+selected-background-alpha = 0.30
+selected-text             = "#404040"
+selected-border           = "#55FF55"
+selected-border-alpha     = 1.0
+
+[polkit]
+background       = "#C6C6C6"
+background-alpha = 1.0
+text             = "#404040"
+text-error       = "#FF5555"
+border           = "#555555"
+border-error     = "#FF5555"
+border-alpha     = 1.0
+border-width     = 3
+scrim            = "#000000"
+scrim-alpha      = 0.5
+accent           = "#55FF55"
+
+[lock]
+background       = "#C6C6C6"
+background-alpha = 0.95
+text             = "#404040"
+placeholder      = "#8B8B8B"
+text-error       = "#FF5555"
+border           = "#555555"
+border-active    = "#55FF55"
+border-error     = "#FF5555"
+border-alpha     = 1.0
+border-width     = 3
+selection        = "#55FF55"
+selection-alpha  = 0.35
+
+[image-picker]
+scrim                   = "#000000"
+scrim-alpha             = 0.5
+text                    = "#C6C6C6"
+selected-border         = "#55FF55"
+selected-border-alpha   = 1.0
+unselected-border       = "#C6C6C6"
+unselected-border-alpha = 0.28
