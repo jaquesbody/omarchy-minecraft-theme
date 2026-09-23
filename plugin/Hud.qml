@@ -1008,6 +1008,20 @@ Item {
         ctx.fillText("[SUPER+E] inventory", bx + bw / 2, by + bh / 2)
         ctx.textAlign = "start"
         ctx.textBaseline = "alphabetic"
+
+        // Bottom-left keybind hints — same type style as the inv chip, no button chrome.
+        var hx0 = panel.invMargin
+        var hy0 = by + bh / 2
+        ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
+        ctx.textAlign = "left"
+        ctx.textBaseline = "middle"
+        ctx.lineWidth = Math.max(1, s / 3)
+        ctx.strokeStyle = "#000000"
+        ctx.strokeText("[SUPER+H] hotbar  [SUPER+M] theme", hx0, hy0)
+        ctx.fillStyle = "#c8c8c8"
+        ctx.fillText("[SUPER+H] hotbar  [SUPER+M] theme", hx0, hy0)
+        ctx.textAlign = "start"
+        ctx.textBaseline = "alphabetic"
       }
     }
 

@@ -782,7 +782,7 @@ Item {
   // Material palette for armor icons: [main, dark, accent]
   // High contrast against the #8b8b8b slot background.
   readonly property var armorTierPalettes: [
-    ["#9a6b42", "#7a4e2a", "#5a3a1a"], // Leather
+    ["#c4854a", "#9a6535", "#6e4a28"], // Leather (warm tan — not wood brown)
     ["#5f6f8a", "#3d4a60", "#4a5870"], // Chainmail (steel blue-gray)
     ["#c87d4a", "#8f4e2a", "#e8a06a"], // Copper
     ["#e8e8e8", "#909090", "#b8b8b8"], // Iron
@@ -1454,7 +1454,7 @@ Item {
     ".bbbbbbbb.",
     ".........."
   ]
-  readonly property var mapClothBoots: { "b": "#6b4420", "s": "#4a3010", ".": "#00000000" }
+  readonly property var mapClothBoots: { "b": "#8a5a32", "s": "#6a4224", ".": "#00000000" }
 
   // Per-item pixel icons for every filled slot (9×9 unless noted).
   readonly property var gridWriter: [
@@ -2706,7 +2706,7 @@ Item {
             var teeDark = pal[1]
             var jeans = pal[0]
             var jeansDark = pal[1]
-            var shoes = pal[1]
+            var shoes = pal[2]
             // head
             ctx.fillStyle = "#3a2a1a"
             ctx.fillRect(x + 4 * s, y + dy, 8 * s, 8 * s)
