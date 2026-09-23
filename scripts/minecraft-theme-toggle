@@ -15,10 +15,16 @@ STATE_DIR="$HOME/.local/state/minecraft-theme"
 PREV_FILE="$STATE_DIR/previous-theme"
 PREV_FONT_FILE="$STATE_DIR/previous-font"
 PREV_BASE_FILE="$STATE_DIR/previous-base-size"
+HOTBAR_TIP_FLAG="$STATE_DIR/hotbar-tip-shown"
 USER_SHELL_TOML="$HOME/.config/omarchy/shell.toml"
 BIN_MCSPLASH="$HOME/.local/bin/minecraft-splash"
 BIN_MCTOAST="$HOME/.local/bin/minecraft-toast"
-mkdir -p "$STATE_DIR"
+BIN_MCHOTBAR="$HOME/.local/bin/minecraft-hotbar"
+CONFIG_DIR="$HOME/.config/minecraft_theme"
+SCREENSAVER_MC="$CONFIG_DIR/screensaver-mc.txt"
+SCREENSAVER_USER="$HOME/.config/omarchy/branding/screensaver.txt"
+SCREENSAVER_PREV="$STATE_DIR/screensaver-prev.txt"
+mkdir -p "$STATE_DIR" "$CONFIG_DIR"
 
 current_name() {
   cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null || echo ""
@@ -124,7 +130,11 @@ if [ "$current" = "$THEME_NAME" ]; then
   set_base_size "$prev_base"
   # Hide the HUD overlay when leaving the Minecraft theme.
   if [ -f "$STATE_DIR/overlay-active" ]; then
-    "$HOME/.local/bin/minecraft-hotbar" hide || true
+    "$BIN_MCHOTBAR" hide || true
+  fi
+  # Restore previous screensaver branding (undo Minecraft easter egg).
+  if [ -f "$SCREENSAVER_PREV" ]; then
+    cp "$SCREENSAVER_PREV" "$SCREENSAVER_USER" 2>/dev/null || true
   fi
 else
   # Minecraft is not active -> save current theme/font/text size and switch
@@ -141,4 +151,20 @@ else
   # Splash + toast celebrate entering the Minecraft theme.
   if [ -x "$BIN_MCSPLASH" ]; then "$BIN_MCSPLASH" || true; fi
   if [ -x "$BIN_MCTOAST" ]; then "$BIN_MCTOAST" "Theme Applied" "minecraft" || true; fi
+  # Pre-load HUD + hotbar so overlays are ready (mirrors hide on OFF).
+  if [ -x "$BIN_MCHOTBAR" ]; then "$BIN_MCHOTBAR" show || true; fi
+  # First-run tip at the hotbar (exact copy requested by user).
+  if [ ! -f "$HOTBAR_TIP_FLAG" ]; then
+    touch "$HOTBAR_TIP_FLAG"
+    if [ -x "$BIN_MCHOTBAR" ]; then
+      "$BIN_MCHOTBAR" show "SUPER+M to toggle hotbar on/off" || true
+    fi
+  fi
+  # Minecraft-style Omarchy screensaver branding (backup original once).
+  if [ -f "$SCREENSAVER_MC" ]; then
+    if [ ! -f "$SCREENSAVER_PREV" ] && [ -f "$SCREENSAVER_USER" ]; then
+      cp "$SCREENSAVER_USER" "$SCREENSAVER_PREV" 2>/dev/null || true
+    fi
+    cp "$SCREENSAVER_MC" "$SCREENSAVER_USER" 2>/dev/null || true
+  fi
 fi

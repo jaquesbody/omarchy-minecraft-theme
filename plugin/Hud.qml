@@ -10,6 +10,8 @@ Item {
   id: root
 
   property bool opened: false
+  // One-shot intro tip (payload {tip}) shown above the hotbar for a few seconds.
+  property string introTip: ""
   function open(payload) {
     opened = true
     try {
@@ -19,7 +21,35 @@ Item {
         if (isFinite(n))
           selectedSlot = Math.max(0, Math.min(8, Math.round(n)))
       }
+      if (p && p.tip)
+        showIntroTip(String(p.tip))
     } catch (e) {}
+  }
+  function showIntroTip(text) {
+    introTip = String(text || "")
+    if (introTip.length)
+      introTipTimer.restart()
+    else
+      introTipTimer.stop()
+    // Position once panel geometry is known (may still be 0 on first frame).
+    requestIntroTipPos()
+  }
+  function requestIntroTipPos() {
+    if (!introTip.length) return
+    Qt.callLater(function() {
+      if (!root.introTip.length || !panel) return
+      var x = panel.hotbarX + panel.hotbarW / 2
+      var y = panel.hotbarY - 4 * panel.s
+      root.showTip(root.introTip, x, y, "intro")
+    })
+  }
+  Timer {
+    id: introTipTimer
+    interval: 6000
+    onTriggered: {
+      root.introTip = ""
+      root.hideTip("intro")
+    }
   }
   function close() { opened = false }
   // IPC probe for toggle scripts (FLAG files desync across shell restarts).
@@ -501,6 +531,21 @@ Item {
     // Inventory rewrites this file on drag-drop; reload so the HUD updates live.
     onFileChanged: reload()
   }
+  // Resolve a system icon for a hotbar item (HUD has no appRows index).
+  // Prefer the stamped iconUrl; fall back by name via Quickshell.iconPath.
+  function resolveSlotIcon(item) {
+    if (item && item.iconUrl) return String(item.iconUrl)
+    var nm = item && item.name ? String(item.name) : ""
+    if (!nm.length) return ""
+    try {
+      var p = Quickshell.iconPath(nm, true)
+      if (p && p.length) return p
+      p = Quickshell.iconPath(nm.toLowerCase(), true)
+      if (p && p.length) return p
+    } catch (e) {}
+    return ""
+  }
+
   function applyHotbarOrder() {
     try {
       // Must call text() on the FileView — bare text() is not in scope here.
@@ -511,8 +556,14 @@ Item {
         var ok = true
         for (var i = 0; i < 9; i++) {
           var it = o.items[i]
-          if (it && it.name && it.cmd && (it.rows || it.iconUrl || it.glyph)) row.push(it)
-          else { ok = false; break }
+          if (it && it.name && it.cmd && (it.rows || it.iconUrl || it.glyph)) {
+            // Stamp a system icon when inventory saved the item without one.
+            if (!it.iconUrl) {
+              var u = root.resolveSlotIcon(it)
+              if (u) it.iconUrl = u
+            }
+            row.push(it)
+          } else { ok = false; break }
         }
         if (ok) {
           slots = row
@@ -877,8 +928,9 @@ Item {
           var gx = hx + (1 + pitch * j) * s
           var gy = hy + 2 * s
           var drewHud = false
-          if (item.iconUrl) {
-            var himg = root.hudIconImage(item.iconUrl)
+          var hudUrl = root.resolveSlotIcon(item)
+          if (hudUrl) {
+            var himg = root.hudIconImage(hudUrl)
             if (himg && himg.status === Image.Ready) {
               ctx.imageSmoothingEnabled = false
               ctx.drawImage(himg, gx, gy, inner * s, inner * s)

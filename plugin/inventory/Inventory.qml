@@ -571,7 +571,8 @@ Item {
   }
 
   // System icon URLs for classic main/hotbar slots (avoids chunky 9×9 art
-  // when a matching desktop entry icon exists). Keyed by slot index.
+  // when a matching desktop entry icon exists). Stamped onto each item so
+  // swaps/craft wells never read the wrong index's icon (hangover/staleness).
   property var slotIconUrls: ({})
   function findAppIconUrl(name) {
     var n = String(name || "").toLowerCase()
@@ -588,15 +589,34 @@ Item {
     }
     return best
   }
+  // Resolve icon for any display item (main/craft/hotbar/armor) by name.
+  function iconForItem(it) {
+    if (!it) return ""
+    if (it.iconUrl) return String(it.iconUrl)
+    return findAppIconUrl(it.name)
+  }
   function syncSlotIcons() {
     var m = {}
+    var a = slots
+    var stamped = false
     for (var i = 0; i < slotCount; i++) {
-      var it = slots[i]
+      var it = a[i]
       if (!it || !it.name) continue
-      if (it.iconUrl) { m[i] = it.iconUrl; continue }
-      var u = findAppIconUrl(it.name)
-      if (u) m[i] = u
+      if (!it.iconUrl) {
+        var u = findAppIconUrl(it.name)
+        if (u) {
+          // Copy-on-write so QML notices the change and saveHotbar persists iconUrl.
+          var nit = {}
+          for (var k in it) nit[k] = it[k]
+          nit.iconUrl = u
+          a[i] = nit
+          it = nit
+          stamped = true
+        }
+      }
+      if (it.iconUrl) m[i] = it.iconUrl
     }
+    if (stamped) slots = a
     slotIconUrls = m
     if (opened && invCanvas) invCanvas.requestPaint()
   }
@@ -630,53 +650,56 @@ Item {
   // Active suggestion source: live hover wins, then sticky pin.
   readonly property int suggestSrc: contextSlot >= 0 ? contextSlot : pinnedSlot
 
-  // Related apps/services for a selected launcher (max 4 → armor wells).
+  // Explicit category for suggestion grouping. Order matters — Settings,
+  // Social, and Browser are the user's primary descriptors and supersede
+  // weaker keyword matches so craft wells never propose unrelated apps.
+  function appCategory(name) {
+    var n = String(name || "").toLowerCase()
+    if (/\bsettings?\b|theme|clipboard|emoji|rofi|launcher|printer|password|vpn|shield|security|lock|display|wallpaper|disk\b|disks|network|bluetooth|keyboard|mouse/.test(n))
+      return "Settings"
+    if (/chat|chatgpt|discord|slack|signal|telegram|meet|zoom|whatsapp|hey\b|hermes|social|twitter|fediverse|mastodon|mail|proton|message|\bim\b|\bx\b|x\.com/.test(n))
+      return "Social"
+    if (/brave|browser|chrome|firefox|search|maps|youtube|webapp|yakihonne|\bweb\b|internet|url|http/.test(n))
+      return "Browser"
+    if (/terminal|foot|btop|htop|docker|neovim|nvim|opencode|shell|bash|zsh|git|editor|vim|emacs|system monitor|monitor\b|process/.test(n))
+      return "Terminal"
+    if (/libreoffice|writer|calc|impress|pdf|evince|xournal|note|obsidian|write|word|spreadsheet|slide|present|inkscape|pinta|gimp|image|imv|photo|draw|paint/.test(n))
+      return "Office"
+    if (/file|folder|nautilus|share|send|local|copy|paste|explorer|archive|zip/.test(n))
+      return "Files"
+    if (/mpv|kdenlive|film|video|play|media|music|audio|obs\b|record|camera|screenshot|capture|moonlight|stream/.test(n))
+      return "Media"
+    return "Other"
+  }
+
+  // Related apps for a selected launcher — same category only (max 4).
   function suggestionsFor(i) {
     if (i < 0 || i >= slotCount) return []
     var it = slots[i]
     if (!it || !it.cmd || !it.cmd.length) return []
-    var n = String(it.name || "").toLowerCase()
+    var cat = appCategory(it.name)
     var out = []
-    function add(idx) {
-      if (idx === i) return
-      var s = slots[idx]
-      if (s && s.cmd && s.cmd.length && out.indexOf(s) < 0) out.push(s)
+    for (var k = 0; k < slotCount; k++) {
+      if (k === i) continue
+      var s = slots[k]
+      if (!s || !s.cmd || !s.cmd.length) continue
+      if (out.length >= 4) break
+      if (appCategory(s.name) === cat && out.indexOf(s) < 0)
+        out.push(s)
     }
-    function byName(name) {
-      for (var k = 0; k < slotCount; k++) {
-        if (slots[k] && slots[k].name === name) return k
+    // Soft fallback only when the category is empty (rare singletons).
+    if (!out.length) {
+      var fallbacks = ["Terminal", "File manager", "Clipboard", "Theme menu"]
+      for (var f = 0; f < fallbacks.length && out.length < 4; f++) {
+        for (var k2 = 0; k2 < slotCount; k2++) {
+          var s2 = slots[k2]
+          if (s2 && s2.name === fallbacks[f] && s2.cmd && s2.cmd.length &&
+              s2 !== it && out.indexOf(s2) < 0) {
+            out.push(s2)
+            break
+          }
+        }
       }
-      return -1
-    }
-    function addName(name) { add(byName(name)) }
-
-    if (/libreoffice|writer|calc|impress|pdf|evince/.test(n)) {
-      addName("LibreOffice Writer"); addName("LibreOffice Calc")
-      addName("LibreOffice Impress"); addName("Evince (PDF)")
-      addName("File manager"); addName("Neovim")
-    } else if (/terminal|btop|docker|neovim|nvim|monitor|system/.test(n)) {
-      addName("Terminal"); addName("btop"); addName("Docker")
-      addName("Neovim"); addName("System monitor"); addName("File manager")
-    } else if (/obsidian|note|chatgpt|ink|pinta|xournal|draw|image|imv|inkscape/.test(n)) {
-      addName("Obsidian"); addName("ChatGPT"); addName("Inkscape")
-      addName("Pinta"); addName("Xournal++"); addName("imv")
-    } else if (/mpv|film|kdenlive|obs|video|play|media|youtube/.test(n)) {
-      addName("mpv"); addName("OBS Studio"); addName("Kdenlive")
-      addName("imv"); addName("YouTube")
-    } else if (/brave|browser|search|web|x\.com|yakihonne|mail|maps|proton/.test(n)) {
-      addName("Brave Search"); addName("Google Maps"); addName("Proton Mail")
-      addName("X"); addName("Yakihonne"); addName("YouTube")
-    } else if (/file|folder|disk|printer|copy|share|local/.test(n)) {
-      addName("File manager"); addName("Disks"); addName("Printer")
-      addName("LocalSend"); addName("Clipboard")
-    } else if (/vpn|proton vpn|shield|security/.test(n)) {
-      addName("Proton VPN"); addName("Proton Mail"); addName("Brave Search")
-      addName("Clipboard")
-    } else {
-      // Generic productivity fallbacks
-      addName("Terminal"); addName("File manager")
-      addName("Clipboard"); addName("Theme menu")
-      addName("Emoji picker"); addName("Rofi launcher")
     }
     return out.slice(0, 4)
   }
@@ -1015,6 +1038,18 @@ Item {
     for (var i = 0; i < 9; i++) {
       var it = slots[hotbarBase + i]
       if (it && it.name) {
+        // Stamp system icon onto the persisted record so the HUD never falls
+        // back to pixel art (and so swaps carry iconUrl with the item).
+        if (!it.iconUrl) {
+          var u = findAppIconUrl(it.name)
+          if (u) {
+            var nit = {}
+            for (var k in it) nit[k] = it[k]
+            nit.iconUrl = u
+            slots[hotbarBase + i] = nit
+            it = nit
+          }
+        }
         var rec = {
           name: it.name,
           cmd: it.cmd || [],
@@ -1036,8 +1071,19 @@ Item {
     var a = slots
     for (var i = 0; i < 9; i++) {
       var it = items[i]
-      if (it && it.name && (it.rows || it.iconUrl || it.glyph))
+      if (it && it.name && (it.rows || it.iconUrl || it.glyph)) {
+        // Stamp missing iconUrl by name so HUD + craft draw system icons.
+        if (!it.iconUrl) {
+          var u = findAppIconUrl(it.name)
+          if (u) {
+            var nit = {}
+            for (var k in it) nit[k] = it[k]
+            nit.iconUrl = u
+            it = nit
+          }
+        }
         a[hotbarBase + i] = it
+      }
     }
     slots = a
     if (opened && invCanvas) invCanvas.requestPaint()
@@ -2204,7 +2250,7 @@ Item {
               if (!it) continue
 
               var slotDrew = false
-              var drawUrl = it.iconUrl || root.slotIconUrls[i] || ""
+              var drawUrl = root.iconForItem(it)
               if (drawUrl) {
                 var simg = root.appIconImage(drawUrl)
                 if (simg && simg.status === Image.Ready) {
@@ -2433,7 +2479,7 @@ Item {
               }
               if (!it) continue
               var hotDrew = false
-              var hotUrl = it.iconUrl || root.slotIconUrls[i] || ""
+              var hotUrl = root.iconForItem(it)
               if (hotUrl) {
                 var himg = root.appIconImage(hotUrl)
                 if (himg && himg.status === Image.Ready) {

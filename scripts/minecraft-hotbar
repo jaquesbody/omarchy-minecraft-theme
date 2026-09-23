@@ -53,6 +53,11 @@ do_hide() {
 case "${1:-toggle}" in
   show)
     do_show || { echo "failed to summon HUD"; exit 1; }
+    # Optional tip text: show a one-shot bubble at the hotbar.
+    if [ -n "${2:-}" ]; then
+      tip_payload=$(printf '{"tip":"%s"}' "$2")
+      omarchy-shell shell call "$PLUGIN_ID" open "$tip_payload" 2>/dev/null || true
+    fi
     ;;
   hide)
     do_hide
@@ -80,7 +85,7 @@ case "${1:-toggle}" in
     if shell_open; then echo "on"; elif [ -f "$FLAG" ]; then echo "on"; else echo "off"; fi
     ;;
   *)
-    echo "Usage: minecraft-hotbar [toggle|show|hide|status|select <0-8>]"
+    echo "Usage: minecraft-hotbar [toggle|show [tip]|hide|status|select <0-8>]"
     exit 1
     ;;
 esac

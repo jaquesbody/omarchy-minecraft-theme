@@ -54,6 +54,9 @@ fi
 echo "  -> config: $CONFIG_DIR"
 mkdir -p "$CONFIG_DIR"
 [ -f "$CONFIG_DIR/hotbar.json" ] || echo '{}' > "$CONFIG_DIR/hotbar.json"
+# Minecraft screensaver branding (applied on theme-ON by minecraft-theme-toggle)
+[ -f "$REPO_DIR/assets/screensaver-mc.txt" ] && \
+  cp "$REPO_DIR/assets/screensaver-mc.txt" "$CONFIG_DIR/screensaver-mc.txt"
 
 # 4b. Quickshell plugins (HUD + inventory)
 enable_plugin() {
