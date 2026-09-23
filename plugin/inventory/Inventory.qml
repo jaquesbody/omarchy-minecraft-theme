@@ -271,7 +271,9 @@ Item {
         out.push({
           name: name,
           id: id,
-          sub: String(e.genericName || "")
+          sub: String(e.genericName || ""),
+          icon: String(e.icon || ""),
+          iconUrl: root.resolveAppIcon(e.icon)
         })
       }
       out.sort(function(a, b) {
@@ -284,6 +286,117 @@ Item {
       appRows = out
       if (opened && invCanvas) invCanvas.requestPaint()
     } catch (err) {}
+  }
+
+  // Omarchy system icon (AppLibrary index → themed iconPath fallback).
+  function resolveAppIcon(icon) {
+    var value = String(icon || "")
+    if (!value.length) return ""
+    try {
+      if (appLibrary && typeof appLibrary.iconSource === "function") {
+        var src = String(appLibrary.iconSource(value) || "")
+        if (src.length) return src
+      }
+    } catch (e) {}
+    try {
+      var p = Quickshell.iconPath(value, true)
+      if (p && p.length) return p
+    } catch (e2) {}
+    return ""
+  }
+
+  // Existing inventory pixel sprites, matched by desktop entry name.
+  function appSpriteFor(name) {
+    var n = String(name || "").toLowerCase()
+    if (n.indexOf("libreoffice writer") >= 0 || n.indexOf("omawrite") >= 0)
+      return { rows: root.gridWriter, colors: root.mapWriter }
+    if (n.indexOf("libreoffice calc") >= 0 || n.indexOf("omacalc") >= 0)
+      return { rows: root.gridCalc, colors: root.mapCalc }
+    if (n.indexOf("libreoffice impress") >= 0)
+      return { rows: root.gridImpress, colors: root.mapImpress }
+    if (n.indexOf("docker") >= 0)
+      return { rows: root.gridDocker, colors: root.mapDocker }
+    if (n.indexOf("btop") >= 0 || n.indexOf("system monitor") >= 0)
+      return { rows: root.gridBtop, colors: root.mapBtop }
+    if (n.indexOf("obs") >= 0 || n.indexOf("obsidian") >= 0)
+      return n.indexOf("obsidian") >= 0
+        ? { rows: root.gridObsidian, colors: root.mapObsidian }
+        : { rows: root.gridObs, colors: root.mapObs }
+    if (n.indexOf("inkscape") >= 0)
+      return { rows: root.gridInkscape, colors: root.mapInkscape }
+    if (n.indexOf("pinta") >= 0)
+      return { rows: root.gridPinta, colors: root.mapPinta }
+    if (n.indexOf("evince") >= 0 || n.indexOf("document viewer") >= 0 || n.indexOf("pdf") >= 0)
+      return { rows: root.gridPdf, colors: root.mapPdf }
+    if (n === "mpv" || n.indexOf("mpv media") >= 0)
+      return { rows: root.gridPlay, colors: root.mapPlay }
+    if (n.indexOf("imv") >= 0)
+      return { rows: root.gridImage, colors: root.mapImage }
+    if (n.indexOf("kdenlive") >= 0)
+      return { rows: root.gridFilm, colors: root.mapFilm }
+    if (n.indexOf("chatgpt") >= 0)
+      return { rows: root.gridChatgpt, colors: root.mapChatgpt }
+    if (n.indexOf("localsend") >= 0)
+      return { rows: root.gridShare, colors: root.mapShare }
+    if (n.indexOf("proton vpn") >= 0)
+      return { rows: root.gridShield, colors: root.mapShield }
+    if (n.indexOf("rofi") >= 0)
+      return { rows: root.gridRofi, colors: root.mapRofi }
+    if (n.indexOf("neovim") >= 0 || n === "nvim")
+      return { rows: root.gridNeovim, colors: root.mapNeovim }
+    if (n.indexOf("disks") >= 0 || n.indexOf("disk utility") >= 0)
+      return { rows: root.gridDisk, colors: root.mapDisk }
+    if (n.indexOf("moonlight") >= 0)
+      return { rows: root.gridMoon, colors: root.mapMoon }
+    if (n.indexOf("xournal") >= 0)
+      return { rows: root.gridPen, colors: root.mapPen }
+    if (n.indexOf("files") >= 0 || n.indexOf("nautilus") >= 0)
+      return { rows: root.gridFiles, colors: root.mapFiles }
+    if (n.indexOf("brave") >= 0)
+      return { rows: root.gridBrave, colors: root.mapBrave }
+    if (n.indexOf("terminal") >= 0 || n.indexOf("foot") >= 0)
+      return { rows: root.gridTerminal, colors: root.mapTerminal }
+    if (n.indexOf("youtube") >= 0)
+      return { rows: root.gridYoutube, colors: root.mapYoutube }
+    if (n.indexOf("proton mail") >= 0)
+      return { rows: root.gridProton, colors: root.mapProton }
+    if (n.indexOf("google maps") >= 0)
+      return { rows: root.gridPin, colors: root.mapPin }
+    if (n.indexOf("clipboard") >= 0)
+      return { rows: root.gridClipboard, colors: root.mapClipboard }
+    if (n.indexOf("emoji") >= 0)
+      return { rows: root.gridEmoji, colors: root.mapEmoji }
+    if (n.indexOf("theme") >= 0 || n.indexOf("palette") >= 0)
+      return { rows: root.gridPalette, colors: root.mapPalette }
+    if (n.indexOf("printer") >= 0 || n.indexOf("printing") >= 0)
+      return { rows: root.gridPrinter, colors: root.mapPrinter }
+    if (n.indexOf("chatgpt") >= 0 || n.indexOf("openai") >= 0)
+      return { rows: root.gridChatgpt, colors: root.mapChatgpt }
+    return null
+  }
+
+  // System icon bitmaps for canvas (cached Image objects; repaint when ready).
+  property var appIconCache: ({})
+  Component {
+    id: appIconComp
+    Image {
+      asynchronous: true
+      smooth: false
+      mipmap: false
+      visible: false
+      sourceSize: Qt.size(32, 32)
+      onStatusChanged: {
+        if (invCanvas && status === Image.Ready) invCanvas.requestPaint()
+      }
+    }
+  }
+  function appIconImage(url) {
+    if (!url || !url.length) return null
+    var img = appIconCache[url]
+    if (img) return img
+    img = appIconComp.createObject(root, { source: url })
+    if (img) appIconCache[url] = img
+    return img
   }
 
   function launchApp(a) {
@@ -387,10 +500,14 @@ Item {
   readonly property int playerY: 18 + tabH
   readonly property int playerW: 44
   readonly property int playerH: armorColH
-  readonly property int mainY: 100 + tabH
+  // Extra gap under player/craft so the armor note fits without overlapping.
+  readonly property int mainY: 118 + tabH
   readonly property int hotbarY: mainY + mainRows * pitch + 4
   readonly property int panelW: 176
   readonly property int panelH: hotbarY + pitch + pad
+  // Note band: just below the player/armor column, above the main grid.
+  readonly property int noteY: armorY + armorColH + 4
+  readonly property int noteCx: Math.floor(panelW / 2)
 
   // Selection state for smart armor-box suggestions (classic view).
   property int contextSlot: -1
@@ -453,7 +570,7 @@ Item {
     return out.slice(0, 4)
   }
 
-  // Left column (armor wells 0..3): always Steve's clothing / armor tier.
+  // Left column (armor wells 0..3): Steve's clothes/hair, recolored by tier.
   // Smart suggestions live in the right-side craft wells instead.
   function armorWellItem(w) {
     return slots[armorBase + w]
@@ -462,6 +579,8 @@ Item {
   // Armor material tier from time on device + live activity + installed apps.
   // Cloth → Wood → Chain → Iron → Diamond.
   // score = apps + 2×session-hours + 3×open-windows (all three grow with use).
+  // Thresholds: Wood 50, Chain 100, Iron 160, Diamond 220.
+  // Metrics refresh on open() + appRefreshTimer so tiers move over time.
   function armorTier() {
     var apps = appRows.length
     var hours = Math.max(0, metricHours | 0)
@@ -480,27 +599,28 @@ Item {
   // Material palette for armor icons: [main, dark, accent]
   // High contrast against the #8b8b8b slot background.
   readonly property var armorTierPalettes: [
-    ["#3dafd0", "#2f9fc4", "#4a3fa0"], // Cloth (Steve defaults)
+    ["#8ecff0", "#5a9ec9", "#4a3fa0"], // Cloth (unused — tone 0 keeps Steve maps)
     ["#8b5a2b", "#6b4420", "#5a3a1a"], // Wood
     ["#5f6f8a", "#3d4a60", "#4a5870"], // Chain (steel blue-gray)
     ["#e8e8e8", "#909090", "#b8b8b8"], // Iron
     ["#5decd7", "#1f8f82", "#3ab8a8"]  // Diamond
   ]
   // Recolor a clothing grid's map for the current armor tier.
+  // Cloth (tone 0) returns the map unchanged — Steve's clothes as authored.
   function armorPaletteFor(map) {
     var tone = armorTier().tone
+    if (tone === 0) return map
     var pal = armorTierPalettes[tone]
     var out = {}
     for (var k in map) {
       out[k] = map[k]
     }
-    // Garment keys used by helmet/chest/legs/boots art.
+    // Garment keys used by hair/shirt/trousers/shoes art.
     if (out["c"] !== undefined) { out["c"] = pal[0]; out["C"] = pal[1] }
     if (out["p"] !== undefined) { out["p"] = pal[0] }
     if (out["b"] !== undefined) { out["b"] = pal[2] }
-    // Helmet: recolor shell with the tier; keep the face at cloth/wood,
-    // cover it (metal helm) from chain upward.
-    if (out["h"] !== undefined && tone >= 1) {
+    // Hair → helm shell; face covered (metal) from chain upward.
+    if (out["h"] !== undefined) {
       out["h"] = pal[1]
       if (tone >= 2 && out["s"] !== undefined) out["s"] = pal[0]
     }
@@ -577,7 +697,8 @@ Item {
     return true
   }
 
-  // Persist hotbar row (slots 36-44) so the HUD can follow edits.
+  // Persist the full hotbar row (slots 36-44) so the HUD can follow any item,
+  // including ones dragged in from main storage (not just the default nine).
   FileView {
     id: hotbarFile
     path: Quickshell.env("HOME") + "/.config/minecraft_theme/hotbar.json"
@@ -586,29 +707,49 @@ Item {
     onLoaded: {
       try {
         var o = JSON.parse(text())
-        if (o && o.order && o.order.length === 9) applyHotbarOrder(o.order)
+        if (o && o.items && o.items.length === 9) applyHotbarItems(o.items)
+        else if (o && o.order && o.order.length === 9) applyHotbarOrder(o.order)
       } catch (e) {}
     }
     // Another writer (or ourselves after setText) changed the file.
     onFileChanged: reload()
   }
   function saveHotbar() {
-    var names = []
+    var items = []
     for (var i = 0; i < 9; i++) {
       var it = slots[hotbarBase + i]
-      names.push(it && it.name ? it.name : "")
+      if (it && it.name) {
+        items.push({
+          name: it.name,
+          cmd: it.cmd || [],
+          rows: it.rows || [],
+          colors: it.colors || {}
+        })
+      } else {
+        items.push(null)
+      }
     }
-    hotbarFile.setText(JSON.stringify({ order: names }) + "\n")
-    // Push an immediate re-read so ordering settles without waiting for inotify.
+    hotbarFile.setText(JSON.stringify({ items: items }) + "\n")
     hotbarFile.reload()
   }
+  function applyHotbarItems(items) {
+    if (!items || items.length !== 9) return
+    var a = slots
+    for (var i = 0; i < 9; i++) {
+      var it = items[i]
+      if (it && it.name && it.rows) a[hotbarBase + i] = it
+    }
+    slots = a
+    if (opened && invCanvas) invCanvas.requestPaint()
+  }
   function applyHotbarOrder(names) {
-    // Reorder hotbar slots to match persisted names; unknown → keep in place.
+    // Legacy {order:[name]} — resolve against every known launcher, not just
+    // the hotbar defaults, so items dragged in from main still match.
     var byName = {}
     var i, it
-    for (i = hotbarBase; i < hotbarBase + 9; i++) {
+    for (i = 0; i < slotCount; i++) {
       it = slots[i]
-      if (it && it.name) byName[it.name] = it
+      if (it && it.name && !byName[it.name]) byName[it.name] = it
     }
     var used = {}
     var row = []
@@ -621,7 +762,7 @@ Item {
         row.push(null)
       }
     }
-    // Fill nulls with any unused hotbar defaults
+    // Fill nulls with unused hotbar defaults
     var spare = []
     for (i = hotbarBase; i < hotbarBase + 9; i++) {
       it = slots[i]
@@ -893,26 +1034,28 @@ Item {
               rows: root.gridProton, colors: root.mapProton }
     a[44] = { name: "YouTube", cmd: ["omarchy-launch-webapp", "https://youtube.com/"],
               rows: root.gridYoutube, colors: root.mapYoutube }
-    // Armor column = Steve's current clothing (display; suggestions may override).
-    a[0] = { name: "Helmet", cmd: [],
+    // Armor column = Steve's current clothes / hair (piece icons; tier palette
+    // recolors them as the armor levels — see armorPaletteFor).
+    a[0] = { name: "Hair", cmd: [],
              rows: root.gridClothHelmet, colors: root.mapClothHelmet }
-    a[1] = { name: "Tunic", cmd: [],
+    a[1] = { name: "Shirt", cmd: [],
              rows: root.gridClothChest, colors: root.mapClothChest }
     a[2] = { name: "Trousers", cmd: [],
              rows: root.gridClothLegs, colors: root.mapClothLegs }
-    a[3] = { name: "Boots", cmd: [],
+    a[3] = { name: "Shoes", cmd: [],
              rows: root.gridClothBoots, colors: root.mapClothBoots }
     return a
   }
 
-  // Clothing pixel icons for the 4 armor wells (Steve palette). All rows 10 wide.
+  // Steve's clothing / hair piece icons for the 4 left wells (10×10).
+  // Base colors match the player preview; armorTierPalettes recolor on level-up.
   readonly property var gridClothHelmet: [
     "..hhhhhh..",
     ".hhhhhhhh.",
     "hhhhhhhhhh",
+    "hhhhhhhhhh",
     "hhsssssshh",
     "hsseessehh",
-    "hssssssshh",
     "hssssssshh",
     ".ssssssssh",
     "..........",
@@ -932,7 +1075,7 @@ Item {
     ".cccccccc.",
     ".........."
   ]
-  readonly property var mapClothChest: { "c": "#3dafd0", "C": "#2f9fc4", ".": "#00000000" }
+  readonly property var mapClothChest: { "c": "#8ecff0", "C": "#5a9ec9", ".": "#00000000" }
 
   readonly property var gridClothLegs: [
     "pppppppppp",
@@ -946,7 +1089,7 @@ Item {
     "ppp....ppp",
     "ppp....ppp"
   ]
-  readonly property var mapClothLegs: { "p": "#4a3fa0", ".": "#00000000" }
+  readonly property var mapClothLegs: { "p": "#4a3fa0", "s": "#3a3080", ".": "#00000000" }
 
   readonly property var gridClothBoots: [
     "..........",
@@ -960,7 +1103,7 @@ Item {
     ".bbbbbbbb.",
     ".........."
   ]
-  readonly property var mapClothBoots: { "b": "#5a3a1a", ".": "#00000000" }
+  readonly property var mapClothBoots: { "b": "#6b4420", "s": "#4a3010", ".": "#00000000" }
 
   // Per-item pixel icons for every filled slot (9×9 unless noted).
   readonly property var gridWriter: [
@@ -1678,7 +1821,7 @@ Item {
             }
 
             // Icons + hover highlight
-            // Armor wells: clothing recolored by tier. Craft/result: smart suggestions.
+            // Armor wells: Steve's clothes recolored by tier. Craft/result: smart suggestions.
             for (var i = 0; i < root.slotCount; i++) {
               var isArmor = i >= root.armorBase && i < root.armorBase + 4
               var it = root.slotDisplayItem(i)
@@ -1713,23 +1856,25 @@ Item {
               }
             }
 
-            // Armor progression note — sits in the grey gap under the right-hand
-            // 2×2 craft wells (before the main 3×9 grid). Driven by apps +
-            // session hours + open windows (see armorTier).
+            // Armor progression note — centered in the gap between the player
+            // column and the main 3×9 grid (see noteY / noteCx).
             {
               var at = root.armorTier()
-              var noteY = root.craftY + 2 * root.craftPitch + root.craftSlot + 8
-              var noteX = root.craftX - 8
               ctx.fillStyle = "#404040"
               ctx.font = "bold " + String(5 * s) + "px Monocraft, monospace"
-              ctx.textAlign = "left"
+              ctx.textAlign = "center"
               ctx.textBaseline = "top"
               ctx.fillText(
-                "Armor: " + at.name + " · " + at.score + " pts",
-                noteX * s, noteY * s)
+                "Use Omarchy more to level up your armor",
+                root.noteCx * s, root.noteY * s)
+              ctx.fillStyle = "#505050"
+              ctx.font = String(4 * s) + "px Monocraft, monospace"
               ctx.fillText(
-                at.count + " apps · " + at.hours + "h · " + at.wins + " wins",
-                noteX * s, (noteY + 7) * s)
+                at.name + " · " + at.score + " pts · " +
+                at.hours + "h · " + at.wins + " wins",
+                root.noteCx * s, (root.noteY + 7) * s)
+              ctx.textAlign = "left"
+              ctx.textBaseline = "top"
             }
 
             // Drag ghost follows the cursor
@@ -1794,14 +1939,44 @@ Item {
               }
 
               if (isApps) {
-                // Letter tile fallback for apps (icons via shell API not drawn on canvas)
+                // Pixel sprite → Omarchy system icon → letter fallback.
                 var a = root.appRows[i]
-                ctx.fillStyle = "#e8e8f0"
-                ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
-                ctx.textAlign = "center"
-                ctx.textBaseline = "middle"
-                var ch = a && a.name ? a.name.charAt(0).toUpperCase() : "?"
-                ctx.fillText(ch, (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
+                var spr = a ? root.appSpriteFor(a.name) : null
+                var pad = 1
+                var ix = (o.x + pad) * s
+                var iy = (o.y + pad) * s
+                var isz = (root.slot - 2 * pad) * s
+                if (spr && spr.rows) {
+                  var siw = spr.rows[0].length
+                  var sih = spr.rows.length
+                  root.paintGrid(ctx,
+                    (o.x + Math.floor((root.slot - siw) / 2)) * s,
+                    (o.y + Math.floor((root.slot - sih) / 2)) * s,
+                    s, spr.rows, spr.colors)
+                } else if (a && a.iconUrl) {
+                  var img = root.appIconImage(a.iconUrl)
+                  if (img && img.status === Image.Ready) {
+                    ctx.imageSmoothingEnabled = false
+                    ctx.drawImage(img, ix, iy, isz, isz)
+                    ctx.imageSmoothingEnabled = true
+                  } else {
+                    ctx.fillStyle = "#e8e8f0"
+                    ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
+                    ctx.textAlign = "center"
+                    ctx.textBaseline = "middle"
+                    ctx.fillText(a && a.name ? a.name.charAt(0).toUpperCase() : "?",
+                                 (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
+                  }
+                } else {
+                  ctx.fillStyle = "#e8e8f0"
+                  ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
+                  ctx.textAlign = "center"
+                  ctx.textBaseline = "middle"
+                  var ch = a && a.name ? a.name.charAt(0).toUpperCase() : "?"
+                  ctx.fillText(ch, (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
+                }
+                ctx.textAlign = "left"
+                ctx.textBaseline = "top"
               } else {
                 var it = root.menuItemAt(i)
                 if (it && it[0]) {
@@ -1889,14 +2064,14 @@ Item {
             ctx.fillRect(x + 7 * s, y + 6 * s, 2 * s, 1 * s)
             ctx.fillStyle = "#8a6040"
             ctx.fillRect(x + 6 * s, y + 7 * s, 4 * s, 1 * s)
-            // torso (cyan tee with shading)
-            ctx.fillStyle = "#3dafd0"
+            // torso (light-blue tee with shading)
+            ctx.fillStyle = "#8ecff0"
             ctx.fillRect(x + 4 * s, y + 8 * s, 8 * s, 10 * s)
-            ctx.fillStyle = "#2f9fc4"
+            ctx.fillStyle = "#5a9ec9"
             ctx.fillRect(x + 4 * s, y + 8 * s, 8 * s, 2 * s)
             ctx.fillRect(x + 4 * s, y + 16 * s, 8 * s, 2 * s)
             // sleeves
-            ctx.fillStyle = "#3dafd0"
+            ctx.fillStyle = "#8ecff0"
             ctx.fillRect(x + 4 * s, y + 8 * s, 2 * s, 4 * s)
             ctx.fillRect(x + 10 * s, y + 8 * s, 2 * s, 4 * s)
             // arms (skin)

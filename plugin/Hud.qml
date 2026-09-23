@@ -479,20 +479,36 @@ Item {
     try {
       // Must call text() on the FileView — bare text() is not in scope here.
       var o = JSON.parse(hotbarOrderFile.text())
+      // Preferred: full items (name+cmd+art) so any dragged-in launcher works.
+      if (o && o.items && o.items.length === 9) {
+        var row = []
+        var ok = true
+        for (var i = 0; i < 9; i++) {
+          var it = o.items[i]
+          if (it && it.name && it.rows && it.colors && it.cmd) row.push(it)
+          else { ok = false; break }
+        }
+        if (ok) {
+          slots = row
+          hud.requestPaint()
+          return
+        }
+      }
+      // Legacy {order:[name]} — only reorder the nine built-in slots.
       if (!o || !o.order || o.order.length !== 9) return
       var byName = {}
-      for (var i = 0; i < slots.length; i++) {
+      for (i = 0; i < slots.length; i++) {
         if (slots[i] && slots[i].name) byName[slots[i].name] = slots[i]
       }
       var used = {}
-      var row = []
+      var legacy = []
       for (i = 0; i < 9; i++) {
         var nm = String(o.order[i] || "")
         if (byName[nm] && !used[nm]) {
-          row.push(byName[nm])
+          legacy.push(byName[nm])
           used[nm] = true
         } else {
-          row.push(null)
+          legacy.push(null)
         }
       }
       var spare = []
@@ -504,10 +520,10 @@ Item {
         }
       }
       for (i = 0; i < 9; i++) {
-        if (!row[i] && spare.length) row[i] = spare.shift()
+        if (!legacy[i] && spare.length) legacy[i] = spare.shift()
       }
-      if (row.filter(function(x) { return !!x }).length === 9) {
-        slots = row
+      if (legacy.filter(function(x) { return !!x }).length === 9) {
+        slots = legacy
         hud.requestPaint()
       }
     } catch (e) {}

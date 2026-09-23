@@ -133,14 +133,13 @@ Item {
           ])
         }
 
-        // Flip so Steve points right (scale.x = -1 mirrors the sprite).
+        // Unmirrored: source frames face/walk toward the right.
         Item {
           id: steveFlip
-          anchors.left: parent.left
+          anchors.horizontalCenter: parent.horizontalCenter
           anchors.top: parent.top
           width: panel.steveW
           height: panel.steveH
-          transform: Scale { xScale: -1; origin.x: steveFlip.width / 2; origin.y: steveFlip.height / 2 }
 
           // Ping-pong walk cycle (green screen removed). Plays only while
           // the cursor moves; freezes on frame 0 when idle.
@@ -201,14 +200,13 @@ Item {
           id: posLabel
           anchors.top: steveFlip.bottom
           anchors.topMargin: 3 * panel.s
-          // Pin "P" of Position ~5px from the left edge of the screen.
-          x: 5 - root.anchorX * panel.s
-          horizontalAlignment: Text.AlignLeft
+          anchors.horizontalCenter: parent.horizontalCenter
+          horizontalAlignment: Text.AlignHCenter
           text: "Position " + root.cursorX + ", " + root.cursorY
           color: "#ffffff"
           style: Text.Outline
           styleColor: "#000000"
-          font { family: "Monocraft"; pixelSize: 5 * panel.s }
+          font { family: "Monocraft"; pixelSize: 4 * panel.s }
         }
       }
     }
@@ -278,8 +276,8 @@ Item {
     "E": "#ffffff",
     "i": "#3b5dc9",
     "n": "#c4956a",
-    "M": "#3dafd0",
-    "A": "#2f9fc4",
+    "M": "#8ecff0",
+    "A": "#5a9ec9",
     "b": "#c8a27a",
     "p": "#4a3fa0",
     ".": "#00000000"
