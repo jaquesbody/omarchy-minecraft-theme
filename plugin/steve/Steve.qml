@@ -12,7 +12,11 @@ Item {
   property bool herobrine: false
   onHerobrineChanged: {
     herobrineOverlay.requestPaint()
-    if (herobrine) herobrineTimer.restart()
+    if (herobrine) {
+      animPlay = false
+      try { steveAnim.currentFrame = 0 } catch (e) {}
+      herobrineTimer.restart()
+    }
   }
 
   function open(payload) {
@@ -242,19 +246,47 @@ Item {
               var ctx = getContext("2d")
               ctx.clearRect(0, 0, width, height)
               if (!root.herobrine || width <= 0 || height <= 0) return
-              // Source texture is 48×59; item matches aspect (PreserveAspectFit).
-              var sx = width / 48
-              var sy = height / 59
-              // Big white eye blocks over Steve's eyes (source-pixel coords).
+              // Resolve the painted image rect under PreserveAspectFit so the
+              // overlay lands on the face whether steve.gif (250×393) or
+              // steve.png (48×59) is showing.
+              var srcW = 48, srcH = 59
+              if (steveAnim.status === AnimatedImage.Ready && steveAnim.sourceSize.width > 0) {
+                srcW = steveAnim.sourceSize.width
+                srcH = steveAnim.sourceSize.height
+              } else if (steveImg.status === Image.Ready && steveImg.sourceSize.width > 0) {
+                srcW = steveImg.sourceSize.width
+                srcH = steveImg.sourceSize.height
+              }
+              // Prefer intrinsic image size when available (more accurate than sourceSize).
+              if (steveAnim.status === AnimatedImage.Ready && steveAnim.implicitWidth > 0) {
+                srcW = steveAnim.implicitWidth
+                srcH = steveAnim.implicitHeight
+              } else if (steveImg.status === Image.Ready && steveImg.sourceSize.width > 0) {
+                // sourceSize is requested decode size; use natural if set
+                if (steveImg.source.width > 0) { srcW = steveImg.source.width; srcH = steveImg.source.height }
+              }
+              var ar = srcW / srcH
+              var boxAR = width / height
+              var imgW, imgH, ox, oy
+              if (boxAR > ar) {
+                imgH = height; imgW = height * ar; ox = (width - imgW) / 2; oy = 0
+              } else {
+                imgW = width; imgH = width / ar; ox = 0; oy = (height - imgH) / 2
+              }
+              // Map face features from the 48×59 steve.png layout onto the
+              // displayed image (proportions hold across texture variants).
+              var sx = imgW / 48, sy = imgH / 59
+              function R(x, y, w, h) {
+                ctx.fillRect(ox + x * sx, oy + y * sy, w * sx, h * sy)
+              }
               ctx.fillStyle = "#ffffff"
-              // left eye
-              ctx.fillRect(20 * sx, 7 * sy, 6 * sx, 5 * sy)
-              // right eye
-              ctx.fillRect(25 * sx, 6 * sy, 6 * sx, 5 * sy)
-              // Evil white smile — wide grin with upturned corners.
-              ctx.fillRect(20 * sx, 14 * sy, 11 * sx, 2 * sy)
-              ctx.fillRect(19 * sx, 13 * sy, 2 * sx, 2 * sy)
-              ctx.fillRect(30 * sx, 13 * sy, 2 * sx, 2 * sy)
+              // Big white eyes over the original eye pixels (≈ x22-27, y8-10).
+              R(20, 7, 5, 5)   // left eye
+              R(25, 6, 5, 5)   // right eye
+              // Evil white smile — wide grin + upturned corners (y≈13-15).
+              R(20, 14, 11, 2) // mouth bar
+              R(19, 13, 2, 2)  // left corner
+              R(30, 13, 2, 2)  // right corner
             }
           }
 
