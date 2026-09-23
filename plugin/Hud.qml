@@ -27,18 +27,23 @@ Item {
   property int guiScale: 2
   property int selectedSlot: 0
 
-  // Hover tooltip (panel-local coords)
+  // Hover tooltip (panel-local coords). Owner prevents cross-area hide races.
   property string tipText: ""
   property real tipX: 0
   property real tipY: 0
   property bool tipVisible: false
-  function showTip(text, x, y) {
+  property string tipOwner: ""
+  function showTip(text, x, y, owner) {
+    tipOwner = owner || ""
     tipText = String(text || "")
     tipX = x
     tipY = y
     tipVisible = tipText.length > 0
   }
-  function hideTip() {
+  function hideTip(owner) {
+    if (owner && tipOwner && tipOwner !== owner)
+      return
+    tipOwner = ""
     tipVisible = false
   }
 
@@ -219,21 +224,21 @@ Item {
 
   // --- Slot items: OG app icons, simply pixelated — sized to fill a 20×20 cell ---
 
-  // 0. Brave Search / new tab — orange tile, white magnifier
+  // 0. Brave — orange shield, white lion wing
   readonly property var gridBrave: [
-    "...#######...",
-    "..#ooooooo#..",
-    ".#ooooooo###.",
-    ".#oooWWoooo#.",
-    ".#ooWoooWoo#.",
-    ".#ooWoooWoo#.",
-    ".#oooWWoooo#.",
-    ".#ooooooo#W#.",
-    ".#ooooooo#W#.",
-    ".#ooooooooW#.",
-    ".#oooooooWW#.",
-    "..#ooooo##...",
-    "...#######..."
+    "....#######...",
+    "..##ooooooo#..",
+    ".#oooooooooo#.",
+    ".#ooWWWWWWoo#.",
+    ".#oWWooooWWoo#",
+    ".#oWoooooWoo#.",
+    ".#oWoooooWoo#.",
+    ".#oWoooooWoo#.",
+    ".#ooWWooooWWo#",
+    ".#ooooooooooo#",
+    ".#ooooWWWWooo#",
+    "..#ooooooooo#.",
+    "...#########.."
   ]
   readonly property var mapBrave: {
     "#": "#3a1004",
@@ -241,18 +246,18 @@ Item {
     "W": "#ffffff"
   }
 
-  // 1. Terminal (foot) — dark screen, green prompt + cursor
+  // 1. Terminal (foot) — dark screen, green prompt + block cursor. All rows 13 wide.
   readonly property var gridTerminal: [
     "#############",
     "#kkkkkkkkkkk#",
     "#kkkkkkkkkkk#",
     "#kg#kkkkkkkk#",
-    "#k.kg#kkkkkk#",
-    "#k.k.kg#####.",
-    "#k.k.kgkkkkk#",
-    "#k.k.kg#kkkk#",
-    "#kg#kkkkkkkk#",
-    "#kggkkkkkkkk#",
+    "#kkkgkkkkkkk#",
+    "#kkkkg#######",
+    "#kkkkkkkkkkk#",
+    "#kkkkkkkkkkk#",
+    "#kg##########",
+    "#kgggggggggg#",
     "#kkkkkkkkkkk#",
     "#kkkkkkkkkkk#",
     "#############"
@@ -260,8 +265,7 @@ Item {
   readonly property var mapTerminal: {
     "#": "#0a0a0c",
     "k": "#141418",
-    "g": "#3ddf6e",
-    ".": "#141418"
+    "g": "#3ddf6e"
   }
 
   // 2. OpenCode — dark frame with light inner field (brand mark)
@@ -326,18 +330,18 @@ Item {
     ".": "#0d0d0d"
   }
 
-  // 5. Yakihonne — white tile, purple mark
+  // 5. Yakihonne — white tile, purple Y + orbit
   readonly property var gridYakihonne: [
     "#############",
     "#wwwwwwwwwww#",
-    "#wwwWwwwWwww#",
-    "#wwwWwwwWwww#",
-    "#wwWWwwwWWww#",
-    "#wwwwWWWwwww#",
-    "#wwwwwWwwwww#",
-    "#wwwwWWwwwww#",
-    "#wwwWwwWwwww#",
-    "#wwwWwwwWwww#",
+    "#wWwwwwwWwww#",
+    "#wWWwwwWWwww#",
+    "#wwWWvWWwwww#",
+    "#wwwvVvwwwww#",
+    "#wwwvVwwwwww#",
+    "#wwvvVvwwwww#",
+    "#wWwwwWwwwww#",
+    "#wWwwwwwWwww#",
     "#wwwwwwwwwww#",
     "#wwwwwwwwwww#",
     "#############"
@@ -345,7 +349,9 @@ Item {
   readonly property var mapYakihonne: {
     "#": "#4a0848",
     "w": "#f7f2f7",
-    "W": "#840c84"
+    "W": "#840c84",
+    "v": "#b44bdb",
+    "V": "#6a0a6a"
   }
 
   // 6. Files — blue folder with raised tab
@@ -604,7 +610,7 @@ Item {
       width: (panel.invX + panel.invW) - panel.hotbarX
       height: panel.height - hitRoot.y
 
-      // --- Hotbar slots: hover tip + click select & launch ---
+      // --- Hotbar slots: one hit-test MouseArea (same pattern as inventory) ---
       Item {
         id: hotbarArea
         x: 0
@@ -612,25 +618,34 @@ Item {
         width: panel.hotbarW
         height: panel.hotbarH
 
-        Repeater {
-          model: 9
-          delegate: MouseArea {
-            required property int index
-            x: (1 + panel.cellPitch * index) * panel.s
-            y: 0
-            width: panel.cellPitch * panel.s
-            height: panel.hotbarH
-            hoverEnabled: true
-            property var slotDef: root.slots[index] || null
-            onContainsMouseChanged: {
-              if (containsMouse && slotDef)
-                root.showTip(slotDef.name, panel.hotbarX + x + width / 2, panel.hotbarY - 4 * panel.s)
-              else if (!containsMouse)
-                root.hideTip()
-            }
-            onClicked: function() {
-              root.selectedSlot = index
-              root.launchSlot(index)
+        MouseArea {
+          anchors.fill: parent
+          hoverEnabled: true
+          property int hoverIndex: -1
+          function indexAt(mx) {
+            var u = mx / panel.s
+            var idx = Math.floor((u - 1) / panel.cellPitch)
+            return (idx >= 0 && idx < 9) ? idx : -1
+          }
+          onPositionChanged: function(mouse) {
+            var idx = indexAt(mouse.x)
+            hoverIndex = idx
+            if (idx >= 0 && root.slots[idx])
+              root.showTip(root.slots[idx].name,
+                panel.hotbarX + (1 + panel.cellPitch * idx + panel.cellPitch / 2) * panel.s,
+                panel.hotbarY - 4 * panel.s, "hotbar")
+            else
+              root.hideTip("hotbar")
+          }
+          onExited: {
+            hoverIndex = -1
+            root.hideTip("hotbar")
+          }
+          onClicked: function(mouse) {
+            var idx = indexAt(mouse.x)
+            if (idx >= 0) {
+              root.selectedSlot = idx
+              root.launchSlot(idx)
             }
           }
         }
@@ -644,8 +659,8 @@ Item {
         height: 9 * panel.s
         hoverEnabled: true
         onContainsMouseChanged: {
-          if (containsMouse) root.showTip(root.ramTip, panel.hotbarX + width / 2, panel.armorY - 4 * panel.s)
-          else root.hideTip()
+          if (containsMouse) root.showTip(root.ramTip, panel.hotbarX + width / 2, panel.armorY - 4 * panel.s, "armor")
+          else root.hideTip("armor")
         }
       }
       MouseArea {
@@ -655,8 +670,8 @@ Item {
         height: 9 * panel.s
         hoverEnabled: true
         onContainsMouseChanged: {
-          if (containsMouse) root.showTip(root.volumeTip, panel.hotbarX + width / 2, panel.statusY - 4 * panel.s)
-          else root.hideTip()
+          if (containsMouse) root.showTip(root.volumeTip, panel.hotbarX + width / 2, panel.statusY - 4 * panel.s, "volume")
+          else root.hideTip("volume")
         }
       }
       MouseArea {
@@ -666,8 +681,8 @@ Item {
         height: 9 * panel.s
         hoverEnabled: true
         onContainsMouseChanged: {
-          if (containsMouse) root.showTip(root.wifiTip, panel.hotbarX + x + width / 2, panel.statusY - 4 * panel.s)
-          else root.hideTip()
+          if (containsMouse) root.showTip(root.wifiTip, panel.hotbarX + x + width / 2, panel.statusY - 4 * panel.s, "wifi")
+          else root.hideTip("wifi")
         }
       }
       MouseArea {
@@ -678,8 +693,8 @@ Item {
         hoverEnabled: true
         onContainsMouseChanged: {
           if (containsMouse && root.batteryPresent)
-            root.showTip(root.batteryTip, panel.hotbarX + panel.hotbarW / 2, panel.xpY - 4 * panel.s)
-          else root.hideTip()
+            root.showTip(root.batteryTip, panel.hotbarX + panel.hotbarW / 2, panel.xpY - 4 * panel.s, "xp")
+          else root.hideTip("xp")
         }
       }
 
@@ -693,8 +708,8 @@ Item {
         hoverEnabled: true
         onContainsMouseChanged: {
           hud.requestPaint()
-          if (containsMouse) root.showTip("Inventory", panel.invX + panel.invW / 2, panel.invY - 4 * panel.s)
-          else root.hideTip()
+          if (containsMouse) root.showTip("Inventory", panel.invX + panel.invW / 2, panel.invY - 4 * panel.s, "inv")
+          else root.hideTip("inv")
         }
         onClicked: root.openInventory()
       }
@@ -845,10 +860,11 @@ Item {
       y: panel.xpY - height - Math.round(panel.s * 0.5)
     }
 
-    // Hover tooltip bubble
+    // Hover tooltip bubble — visual only, kept below hitRoot (z:10) so it never
+    // participates in the input region / steals clicks.
     Rectangle {
       id: tipBubble
-      z: 50
+      z: 5
       visible: root.opened && root.tipVisible
       color: Qt.rgba(15 / 255, 15 / 255, 18 / 255, 0.95)
       border.color: "#000000"

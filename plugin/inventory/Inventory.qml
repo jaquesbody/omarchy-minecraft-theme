@@ -61,20 +61,50 @@ Item {
   readonly property int playerH: 32
   readonly property int armorCols: 1
 
-  // y layout (base): title 4, top section 16..68, main 76.., hotbar after main+4
-  readonly property int titleY: 6
-  readonly property int topY: 16
+  // y layout (base): tabs 0..tabH, then classic layout shifted by tabH
+  readonly property int tabH: 14
+  readonly property int titleY: 6 + tabH
+  readonly property int topY: 16 + tabH
   readonly property int craftX: 98
   readonly property int craftResultX: 154
-  readonly property int craftY: 18
+  readonly property int craftY: 18 + tabH
   readonly property int playerX: 50
-  readonly property int playerY: 18
+  readonly property int playerY: 18 + tabH
   readonly property int armorX: 8
-  readonly property int armorY: 18
-  readonly property int mainY: 84
+  readonly property int armorY: 18 + tabH
+  readonly property int mainY: 84 + tabH
   readonly property int hotbarY: mainY + mainRows * pitch + 4
   readonly property int panelW: 176
   readonly property int panelH: hotbarY + pitch + pad
+
+  // Omarchy menu root tabs (same routes as omarchy-menu.jsonc).
+  readonly property var menuTabs: [
+    { route: "apps", label: "Apps" },
+    { route: "learn", label: "Learn" },
+    { route: "trigger", label: "Trig" },
+    { route: "style", label: "Style" },
+    { route: "setup", label: "Set" },
+    { route: "install", label: "Inst" },
+    { route: "remove", label: "Rem" },
+    { route: "update", label: "Upd" },
+    { route: "about", label: "Info" },
+    { route: "system", label: "Sys" }
+  ]
+  property int hoveredTab: -1
+
+  function hitTab(px, py) {
+    if (py < 0 || py >= tabH || px < 2 || px >= panelW - 2) return -1
+    var n = menuTabs.length
+    var gap = 1
+    var w = (panelW - 4 - gap * (n - 1)) / n
+    var i = Math.floor((px - 2) / (w + gap))
+    return (i >= 0 && i < n) ? i : -1
+  }
+  function openTab(i) {
+    var t = menuTabs[i]
+    if (t && t.route)
+      Quickshell.execDetached(["omarchy", "menu", "summon", t.route])
+  }
 
   // Slot indexes: 0-3 armor, 4-7 craft, 8 result, 9-35 main (27), 36-44 hotbar (9)
   readonly property int armorBase: 0
@@ -87,12 +117,12 @@ Item {
   // Compact brand sprites (also used for hotbar row). Defined before `slots`.
   readonly property var gridBrave: [
     "..ooooo..",
-    ".oWWWoW..",
-    ".oWoooWo.",
-    ".oWoooWo.",
-    ".oWWWoWo.",
-    ".oooooWW.",
-    ".oWoooWW.",
+    ".oWWWWoo.",
+    ".oWWoooo.",
+    ".oWooooo.",
+    ".oWooooo.",
+    ".oWWoooo.",
+    ".ooooWWo.",
     "..ooooo..",
     "........."
   ]
@@ -102,14 +132,14 @@ Item {
     "#########",
     "#kkkkkkk#",
     "#kg#kkkk#",
-    "#k.kg#kk#",
-    "#k.k.kg#.",
-    "#k.kg###k",
-    "#kg#kkkk#",
-    "#kggkkkk#",
+    "#kkkgkkk#",
+    "#kkkkg###",
+    "#kkkkkkk#",
+    "#kg######",
+    "#kgggggg#",
     "#########"
   ]
-  readonly property var mapTerminal: { "#": "#0a0a0c", "k": "#141418", "g": "#3ddf6e", ".": "#141418" }
+  readonly property var mapTerminal: { "#": "#0a0a0c", "k": "#141418", "g": "#3ddf6e" }
 
   readonly property var gridOpenCode: [
     "#########",
@@ -153,15 +183,15 @@ Item {
   readonly property var gridYakihonne: [
     "#########",
     "#wwwwwww#",
-    "#wWWwwWWw",
-    "#wwwWWwww",
-    "#wwWWwwww",
-    "#wwwWwwww",
-    "#wWWwwWWw",
-    "#wwwwwww#",
+    "#wWwwwWw#",
+    "#wWWwWWw#",
+    "#wwwvwww#",
+    "#wwwvwww#",
+    "#wwvvwww#",
+    "#wWwwwWw#",
     "#########"
   ]
-  readonly property var mapYakihonne: { "#": "#4a0848", "w": "#f7f2f7", "W": "#840c84" }
+  readonly property var mapYakihonne: { "#": "#4a0848", "w": "#f7f2f7", "W": "#840c84", "v": "#b44bdb" }
 
   readonly property var gridFiles: [
     ".bb......",
@@ -206,34 +236,61 @@ Item {
   // Hotbar row mirrors HUD order for muscle memory.
   readonly property var slots: {
     var a = new Array(slotCount)
-    // Main storage (27) — extra launchers
-    a[9]  = { name: "LibreOffice Writer", cmd: ["uwsm-app", "--", "libreoffice", "--writer"] }
-    a[10] = { name: "LibreOffice Calc", cmd: ["uwsm-app", "--", "libreoffice", "--calc"] }
-    a[11] = { name: "LibreOffice Impress", cmd: ["uwsm-app", "--", "libreoffice", "--impress"] }
-    a[12] = { name: "Docker", cmd: ["omarchy-launch-terminal", "docker", "ps"] }
-    a[13] = { name: "btop", cmd: ["omarchy-launch-terminal", "btop"] }
-    a[14] = { name: "OBS Studio", cmd: ["uwsm-app", "--", "obs"] }
-    a[15] = { name: "Inkscape", cmd: ["uwsm-app", "--", "inkscape"] }
-    a[16] = { name: "Pinta", cmd: ["uwsm-app", "--", "pinta"] }
-    a[17] = { name: "Evince (PDF)", cmd: ["uwsm-app", "--", "evince"] }
-    a[18] = { name: "mpv", cmd: ["omarchy-launch-terminal", "mpv"] }
-    a[19] = { name: "imv", cmd: ["uwsm-app", "--", "imv"] }
-    a[20] = { name: "Kdenlive", cmd: ["uwsm-app", "--", "kdenlive"] }
-    a[21] = { name: "ChatGPT", cmd: ["uwsm-app", "--", "chatgpt"] }
-    a[22] = { name: "Google Maps", cmd: ["omarchy-launch-webapp", "https://maps.google.com/"] }
-    a[23] = { name: "LocalSend", cmd: ["uwsm-app", "--", "localsend"] }
-    a[24] = { name: "Proton VPN", cmd: ["uwsm-app", "--", "protonvpn-app"] }
-    a[25] = { name: "Rofi launcher", cmd: ["rofi", "-show", "drun"] }
-    a[26] = { name: "Neovim", cmd: ["omarchy-launch-terminal", "nvim"] }
-    a[27] = { name: "Disks", cmd: ["uwsm-app", "--", "gnome-disks"] }
-    a[28] = { name: "Moonlight", cmd: ["uwsm-app", "--", "moonlight"] }
-    a[29] = { name: "Xournal++", cmd: ["uwsm-app", "--", "xournalpp-wrapper"] }
-    a[30] = { name: "System monitor", cmd: ["omarchy-launch-terminal", "btop"] }
-    a[31] = { name: "File manager", cmd: ["omarchy-launch-nautilus"] }
-    a[32] = { name: "Printer", cmd: ["system-config-printer"] }
-    a[33] = { name: "Clipboard", cmd: ["omarchy-shell", "shell", "toggle", "omarchy.clipboard", "{}"] }
-    a[34] = { name: "Emoji picker", cmd: ["omarchy-shell", "shell", "toggle", "omarchy.emojis", "{}"] }
-    a[35] = { name: "Theme menu", cmd: ["omarchy-menu", "toggle", "theme"] }
+    // Main storage (27) — launchers with individual pixel icons
+    a[9]  = { name: "LibreOffice Writer", cmd: ["uwsm-app", "--", "libreoffice", "--writer"],
+              rows: root.gridWriter, colors: root.mapWriter }
+    a[10] = { name: "LibreOffice Calc", cmd: ["uwsm-app", "--", "libreoffice", "--calc"],
+              rows: root.gridCalc, colors: root.mapCalc }
+    a[11] = { name: "LibreOffice Impress", cmd: ["uwsm-app", "--", "libreoffice", "--impress"],
+              rows: root.gridImpress, colors: root.mapImpress }
+    a[12] = { name: "Docker", cmd: ["omarchy-launch-terminal", "docker", "ps"],
+              rows: root.gridDocker, colors: root.mapDocker }
+    a[13] = { name: "btop", cmd: ["omarchy-launch-terminal", "btop"],
+              rows: root.gridBtop, colors: root.mapBtop }
+    a[14] = { name: "OBS Studio", cmd: ["uwsm-app", "--", "obs"],
+              rows: root.gridObs, colors: root.mapObs }
+    a[15] = { name: "Inkscape", cmd: ["uwsm-app", "--", "inkscape"],
+              rows: root.gridInkscape, colors: root.mapInkscape }
+    a[16] = { name: "Pinta", cmd: ["uwsm-app", "--", "pinta"],
+              rows: root.gridPinta, colors: root.mapPinta }
+    a[17] = { name: "Evince (PDF)", cmd: ["uwsm-app", "--", "evince"],
+              rows: root.gridPdf, colors: root.mapPdf }
+    a[18] = { name: "mpv", cmd: ["omarchy-launch-terminal", "mpv"],
+              rows: root.gridPlay, colors: root.mapPlay }
+    a[19] = { name: "imv", cmd: ["uwsm-app", "--", "imv"],
+              rows: root.gridImage, colors: root.mapImage }
+    a[20] = { name: "Kdenlive", cmd: ["uwsm-app", "--", "kdenlive"],
+              rows: root.gridFilm, colors: root.mapFilm }
+    a[21] = { name: "ChatGPT", cmd: ["uwsm-app", "--", "chatgpt"],
+              rows: root.gridChatgpt, colors: root.mapChatgpt }
+    a[22] = { name: "Google Maps", cmd: ["omarchy-launch-webapp", "https://maps.google.com/"],
+              rows: root.gridPin, colors: root.mapPin }
+    a[23] = { name: "LocalSend", cmd: ["uwsm-app", "--", "localsend"],
+              rows: root.gridShare, colors: root.mapShare }
+    a[24] = { name: "Proton VPN", cmd: ["uwsm-app", "--", "protonvpn-app"],
+              rows: root.gridShield, colors: root.mapShield }
+    a[25] = { name: "Rofi launcher", cmd: ["rofi", "-show", "drun"],
+              rows: root.gridRofi, colors: root.mapRofi }
+    a[26] = { name: "Neovim", cmd: ["omarchy-launch-terminal", "nvim"],
+              rows: root.gridNeovim, colors: root.mapNeovim }
+    a[27] = { name: "Disks", cmd: ["uwsm-app", "--", "gnome-disks"],
+              rows: root.gridDisk, colors: root.mapDisk }
+    a[28] = { name: "Moonlight", cmd: ["uwsm-app", "--", "moonlight"],
+              rows: root.gridMoon, colors: root.mapMoon }
+    a[29] = { name: "Xournal++", cmd: ["uwsm-app", "--", "xournalpp-wrapper"],
+              rows: root.gridPen, colors: root.mapPen }
+    a[30] = { name: "System monitor", cmd: ["omarchy-launch-terminal", "btop"],
+              rows: root.gridChart, colors: root.mapChart }
+    a[31] = { name: "File manager", cmd: ["omarchy-launch-nautilus"],
+              rows: root.gridFiles, colors: root.mapFiles }
+    a[32] = { name: "Printer", cmd: ["system-config-printer"],
+              rows: root.gridPrinter, colors: root.mapPrinter }
+    a[33] = { name: "Clipboard", cmd: ["omarchy-shell", "shell", "toggle", "omarchy.clipboard", "{}"],
+              rows: root.gridClipboard, colors: root.mapClipboard }
+    a[34] = { name: "Emoji picker", cmd: ["omarchy-shell", "shell", "toggle", "omarchy.emojis", "{}"],
+              rows: root.gridEmoji, colors: root.mapEmoji }
+    a[35] = { name: "Theme menu", cmd: ["omarchy-menu", "toggle", "theme"],
+              rows: root.gridPalette, colors: root.mapPalette }
     // Hotbar row = same 9 as HUD
     a[36] = { name: "Brave Search", cmd: ["omarchy-launch-browser", "https://search.brave.com"],
               rows: root.gridBrave, colors: root.mapBrave }
@@ -256,27 +313,344 @@ Item {
     return a
   }
 
-  // Letter tile for main slots without brand art (first letter of name)
-  function letterTile(name) {
-    var ch = (name || "?").charAt(0).toUpperCase()
-    var bg = "#3a3a48"
-    var fg = "#e8e8f0"
-    return {
-      rows: [
-        "#########",
-        "#.......#",
-        "#.#####.#",
-        "#.#...#.#",
-        "#.##.##.#",
-        "#.#...#.#",
-        "#.#####.#",
-        "#.......#",
-        "#########"
-      ],
-      colors: { "#": bg, ".": bg, "L": fg },
-      letter: ch
-    }
-  }
+  // Per-item pixel icons for every filled slot (9×9 unless noted).
+  readonly property var gridWriter: [
+    "#########",
+    "#dwwwwwwd",
+    "#dwwwwwwd",
+    "#dwWwwWwd",
+    "#dwwwwwwd",
+    "#dwWwwWwd",
+    "#dwwwwwwd",
+    "#dddddddd",
+    "#########"
+  ]
+  readonly property var mapWriter: { "#": "#0a3d91", "d": "#1a5fc4", "w": "#e8f0ff", "W": "#1a5fc4" }
+
+  readonly property var gridCalc: [
+    "#########",
+    "#gwwwwwwg",
+    "#gwWwwWwg",
+    "#gwwwwwwg",
+    "#gwWwwWwg",
+    "#gwwwwwwg",
+    "#gwwwwwwg",
+    "#gggggggg",
+    "#########"
+  ]
+  readonly property var mapCalc: { "#": "#0d7324", "g": "#18a303", "w": "#eaffea", "W": "#0d7324" }
+
+  readonly property var gridImpress: [
+    "#########",
+    "#ooooooo#",
+    "#oWWWooo#",
+    "#oWWWooo#",
+    "#oWWWoRo#",
+    "#oWWoooo#",
+    "#oWooooo#",
+    "#ooooooo#",
+    "#########"
+  ]
+  readonly property var mapImpress: { "#": "#7a2000", "o": "#d3460f", "W": "#fff0e0", "R": "#ffb080" }
+
+  readonly property var gridDocker: [
+    ".........",
+    "..bbbb...",
+    ".bbbbbb..",
+    "bbBbbBbbb",
+    "bbBbbBbbb",
+    "bbbbbbbb.",
+    ".bbbbbb..",
+    "..bbbb...",
+    "........."
+  ]
+  readonly property var mapDocker: { "b": "#0db7ed", "B": "#ffffff" }
+
+  readonly property var gridBtop: [
+    "#########",
+    "#kkkkkkk#",
+    "#kgggggk#",
+    "#kgkggkk#",
+    "#gkggkgg#",
+    "#gggkggg#",
+    "#kkkkkkk#",
+    "#kkkkkkk#",
+    "#########"
+  ]
+  readonly property var mapBtop: { "#": "#0a0a0c", "k": "#141418", "g": "#3ddf6e" }
+
+  readonly property var gridObs: [
+    "#########",
+    "#ooooooo#",
+    "#ooccccco",
+    "#occcccc#",
+    "#occccco#",
+    "#occccco#",
+    "#oocccco#",
+    "#ooooooo#",
+    "#########"
+  ]
+  readonly property var mapObs: { "#": "#1a1a1a", "o": "#303030", "c": "#e0e0e0" }
+
+  readonly property var gridInkscape: [
+    ".........",
+    "......aa.",
+    ".....aa..",
+    "....aa...",
+    "...aa....",
+    "..aa.....",
+    ".aa......",
+    "aa.......",
+    "a........"
+  ]
+  readonly property var mapInkscape: { "a": "#2ec4b6" }
+
+  readonly property var gridPinta: [
+    ".........",
+    "..rrr....",
+    ".rrrrr...",
+    ".rrrrgg..",
+    "..rrggg..",
+    "...ggg...",
+    "..bbbbb..",
+    ".bbbbbbb.",
+    "........."
+  ]
+  readonly property var mapPinta: { "r": "#ff6b6b", "g": "#51cf66", "b": "#4dabf7" }
+
+  readonly property var gridPdf: [
+    "#########",
+    "#wwwwwww#",
+    "#wRwwwww#",
+    "#wRRwRww#",
+    "#wRwRRww#",
+    "#wRwwRww#",
+    "#wRRRRww#",
+    "#wwwwwww#",
+    "#########"
+  ]
+  readonly property var mapPdf: { "#": "#6a0000", "w": "#fff5f5", "R": "#d92027" }
+
+  readonly property var gridPlay: [
+    "#########",
+    "#ooooooo#",
+    "#oWWoooo#",
+    "#oWWWooo#",
+    "#oWWWWoo#",
+    "#oWWWooo#",
+    "#oWWoooo#",
+    "#ooooooo#",
+    "#########"
+  ]
+  readonly property var mapPlay: { "#": "#0a0a0c", "o": "#1a1a1e", "W": "#ffffff" }
+
+  readonly property var gridImage: [
+    "#########",
+    "#ooooooo#",
+    "#oGGGGGo#",
+    "#oGyyGGo#",
+    "#oGGGGGo#",
+    "#ooGoooo#",
+    "#ooooooo#",
+    "#ooooooo#",
+    "#########"
+  ]
+  readonly property var mapImage: { "#": "#0a3040", "o": "#1a6070", "G": "#60c0d0", "y": "#ffe060" }
+
+  readonly property var gridFilm: [
+    "#########",
+    "#aaaaaaaa",
+    "#affffffa",
+    "#aafffffa",
+    "#affffffa",
+    "#aafffffa",
+    "#affffffa",
+    "#aaaaaaaa",
+    "#########"
+  ]
+  readonly property var mapFilm: { "#": "#1a1a2e", "a": "#2d2d44", "f": "#c8c8e0" }
+
+  readonly property var gridChatgpt: [
+    ".........",
+    "..gggg...",
+    ".gwwwwg..",
+    ".gwgwwg..",
+    "ggwwwwgg.",
+    ".gwgwwg..",
+    ".gwwwwg..",
+    "..gggg...",
+    "........."
+  ]
+  readonly property var mapChatgpt: { "g": "#10a37f", "w": "#ffffff" }
+
+  readonly property var gridPin: [
+    "....R....",
+    "...RRR...",
+    "..RWWWR..",
+    ".RWWWWWR.",
+    ".RWWWWWR.",
+    "..RWWWR..",
+    "...RWR...",
+    "....R....",
+    "....#...."
+  ]
+  readonly property var mapPin: { "R": "#ea4335", "W": "#ffffff", "#": "#444444" }
+
+  readonly property var gridShare: [
+    "....aa...",
+    "...a..a..",
+    "..a....a.",
+    "aaaaaaaaa",
+    ".a....a..",
+    "..a..a...",
+    "...aa....",
+    ".........",
+    "........."
+  ]
+  readonly property var mapShare: { "a": "#4dabf7" }
+
+  readonly property var gridShield: [
+    "...sss...",
+    "..sssss..",
+    ".sssssss.",
+    ".sswwwss.",
+    ".sswwwss.",
+    "..sssss..",
+    "...sss...",
+    "....s....",
+    "........."
+  ]
+  readonly property var mapShield: { "s": "#6d4aff", "w": "#b4a0ff" }
+
+  readonly property var gridRofi: [
+    "#########",
+    "#o#o#o#o#",
+    "#########",
+    "#o#o#o#o#",
+    "#########",
+    "#o#o#o#o#",
+    "#########",
+    "#o#o#o#o#",
+    "#########"
+  ]
+  readonly property var mapRofi: { "#": "#0a0a0c", "o": "#3ddf6e" }
+
+  readonly property var gridNeovim: [
+    "#########",
+    "#g.gg.gg#",
+    "#gGg.gGg#",
+    "#gGgggGg#",
+    "#gggGggg#",
+    "#gGg.gGg#",
+    "#g.gg.gg#",
+    "#ggggggg#",
+    "#########"
+  ]
+  readonly property var mapNeovim: { "#": "#0a2a1a", "g": "#57a64e", "G": "#8fe87f" }
+
+  readonly property var gridDisk: [
+    ".........",
+    "..#####..",
+    ".#ooooo#.",
+    "#oo###oo#",
+    "#o#...#o#",
+    "#oo###oo#",
+    ".#ooooo#.",
+    "..#####..",
+    "........."
+  ]
+  readonly property var mapDisk: { "#": "#1a1a22", "o": "#6a6a80" }
+
+  readonly property var gridMoon: [
+    ".........",
+    "..mmm....",
+    ".mmmmm...",
+    "mmmmm....",
+    "mmmmm....",
+    ".mmmmm...",
+    "..mmm....",
+    ".........",
+    "........."
+  ]
+  readonly property var mapMoon: { "m": "#ffe066" }
+
+  readonly property var gridPen: [
+    "........p",
+    ".......pp",
+    "......pp.",
+    ".....pp..",
+    "....pp...",
+    "...pp....",
+    "..pp.....",
+    ".pp......",
+    "p........"
+  ]
+  readonly property var mapPen: { "p": "#f7b32b" }
+
+  readonly property var gridChart: [
+    "#########",
+    "#ggggggg#",
+    "#ggggggg#",
+    "#g#gg#g##",
+    "#g#gg#g##",
+    "#g#g#g###",
+    "#g#g#g###",
+    "#ggggggg#",
+    "#########"
+  ]
+  readonly property var mapChart: { "#": "#0a0a0c", "g": "#3ddf6e" }
+
+  readonly property var gridPrinter: [
+    ".........",
+    "..wwwww..",
+    ".ppppppp.",
+    "pPpppppPp",
+    "pPpppppPp",
+    ".ppppppp.",
+    "..wWWWw..",
+    "..wWWWw..",
+    "........."
+  ]
+  readonly property var mapPrinter: { "p": "#6a6a78", "P": "#3a3a48", "w": "#ffffff", "W": "#e0e0e8" }
+
+  readonly property var gridClipboard: [
+    "..#####..",
+    ".#ccccc#.",
+    "#cwwwwwc#",
+    "#cwwwwwc#",
+    "#cwwwwwc#",
+    "#cwwwwwc#",
+    "#cwwwwwc#",
+    "#ccccccc#",
+    "#########"
+  ]
+  readonly property var mapClipboard: { "#": "#8a7340", "c": "#c4a35a", "w": "#fff8e0" }
+
+  readonly property var gridEmoji: [
+    ".........",
+    "..yyyyy..",
+    ".ywwwwwy.",
+    "ywWwwwWwy",
+    "ywwwwwwwy",
+    "ywWwwWWwy",
+    ".ywwwwwy.",
+    "..yyyyy..",
+    "........."
+  ]
+  readonly property var mapEmoji: { "y": "#ffd43b", "w": "#fff3bf", "W": "#5c3d00" }
+
+  readonly property var gridPalette: [
+    "#########",
+    "#ppppppp#",
+    "#prgbywp#",
+    "#pwwwwwp#",
+    "#pwcocwp#",
+    "#pwwwwwp#",
+    "#ppppppp#",
+    "#########",
+    "#########"
+  ]
+  readonly property var mapPalette: { "#": "#2a2a35", "p": "#4a4a58", "r": "#ff6b6b", "g": "#51cf66", "b": "#4dabf7", "y": "#ffd43b", "w": "#f1f3f5", "c": "#22b8cf", "o": "#ff922b" }
 
   function slotOrigin(i) {
     // returns base-unit {x,y} of slot content origin inside panel
@@ -369,9 +743,15 @@ Item {
           onPositionChanged: function(mouse) {
             var bx = mouse.x / panel.s
             var by = mouse.y / panel.s
-            var i = root.hitSlot(bx, by)
+            var ti = root.hitTab(bx, by)
+            root.hoveredTab = ti
+            var i = (ti >= 0) ? -1 : root.hitSlot(bx, by)
             root.hoveredSlot = i
-            if (i >= 0) {
+            if (ti >= 0) {
+              root.hideTip()
+              var t = root.menuTabs[ti]
+              if (t) root.showTip(t.route, panel.ox + (bx) * panel.s, panel.oy + root.tabH * panel.s)
+            } else if (i >= 0) {
               var it = root.slots[i]
               var label = it ? it.name : ""
               if (label) {
@@ -384,10 +764,18 @@ Item {
               root.hideTip()
             }
           }
-          onExited: root.hideTip()
+          onExited: {
+            root.hoveredTab = -1
+            root.hideTip()
+          }
           onClicked: function(mouse) {
             var bx = mouse.x / panel.s
             var by = mouse.y / panel.s
+            var ti = root.hitTab(bx, by)
+            if (ti >= 0) {
+              root.openTab(ti)
+              return
+            }
             var i = root.hitSlot(bx, by)
             if (i >= 0)
               root.launch(i)
@@ -436,6 +824,33 @@ Item {
             ctx.textAlign = "left"
             ctx.textBaseline = "top"
             ctx.fillText("Inventory", root.pad * s, root.titleY * s)
+
+            // Omarchy menu tabs (top strip)
+            var n = root.menuTabs.length
+            var gap = 1
+            var tw = (root.panelW - 4 - gap * (n - 1)) / n
+            for (var t = 0; t < n; t++) {
+              var tx = (2 + t * (tw + gap)) * s
+              var ty = 2 * s
+              var tww = tw * s
+              var thh = (root.tabH - 4) * s
+              var hot = root.hoveredTab === t
+              ctx.fillStyle = hot ? "#b0b0b0" : "#8b8b8b"
+              ctx.fillRect(tx, ty, tww, thh)
+              ctx.fillStyle = "#373737"
+              ctx.fillRect(tx, ty, tww, s)
+              ctx.fillRect(tx, ty, s, thh)
+              ctx.fillStyle = "#ffffff"
+              ctx.fillRect(tx, ty + thh - s, tww, s)
+              ctx.fillRect(tx + tww - s, ty, s, thh)
+              ctx.fillStyle = hot ? "#ffffff" : "#202020"
+              ctx.font = "bold " + String(5 * s) + "px Monocraft, monospace"
+              ctx.textAlign = "center"
+              ctx.textBaseline = "middle"
+              ctx.fillText(root.menuTabs[t].label, tx + tww / 2, ty + thh / 2)
+            }
+            ctx.textAlign = "left"
+            ctx.textBaseline = "top"
 
             // Player preview well (original stub pixel figure — M5 Steve replaces)
             var plx = root.playerX * s
@@ -503,19 +918,12 @@ Item {
                 var iox = o.x + Math.floor((sz - iw) / 2)
                 var ioy = o.y + Math.floor((sz - ih) / 2)
                 root.paintGrid(ctx, iox * s, ioy * s, s, it.rows, it.colors)
-              } else {
-                // letter tile centered in slot
-                var t = root.letterTile(it.name)
-                var tw = t.rows[0].length
-                var th = t.rows.length
-                var tx = o.x + Math.floor((sz - tw) / 2)
-                var ty = o.y + Math.floor((sz - th) / 2)
-                root.paintGrid(ctx, tx * s, ty * s, s, t.rows, t.colors)
+              } else if (it.name) {
                 ctx.fillStyle = "#e8e8f0"
                 ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
                 ctx.textAlign = "center"
                 ctx.textBaseline = "middle"
-                ctx.fillText(t.letter, (o.x + sz / 2) * s, (o.y + sz / 2) * s)
+                ctx.fillText(it.name.charAt(0).toUpperCase(), (o.x + sz / 2) * s, (o.y + sz / 2) * s)
                 ctx.textAlign = "left"
                 ctx.textBaseline = "top"
               }

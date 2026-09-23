@@ -75,9 +75,8 @@ fi
 # Remove Minecraft keybind lines (user file — only ours).
 if [ -f "$BINDINGS" ]; then
   echo "  -> removing Minecraft bindings from bindings.lua"
-  # Delete blocks that mention our scripts (comment line + bind line + blank).
   python3 - "$BINDINGS" << 'PY'
-import sys, re
+import sys
 path = sys.argv[1]
 with open(path) as f:
     lines = f.readlines()
@@ -85,12 +84,10 @@ out, i = [], 0
 while i < len(lines):
     line = lines[i]
     if "minecraft-" in line and (line.strip().startswith("--") or "o.bind" in line):
-        # skip this line and any immediately following bind if comment
         if line.strip().startswith("--"):
             i += 1
             if i < len(lines) and "minecraft-" in lines[i]:
                 i += 1
-            # drop one trailing blank if present
             if i < len(lines) and lines[i].strip() == "":
                 i += 1
             continue
@@ -102,6 +99,11 @@ while i < len(lines):
 with open(path, "w") as f:
     f.writelines(out)
 PY
+fi
+
+# Also strip any leftover splash bind (older installs)
+if [ -f "$BINDINGS" ]; then
+  grep -v "minecraft-splash" "$BINDINGS" > "$BINDINGS.tmp" 2>/dev/null && mv "$BINDINGS.tmp" "$BINDINGS" || true
 fi
 
 echo ""

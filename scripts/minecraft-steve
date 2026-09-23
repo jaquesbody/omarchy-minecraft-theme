@@ -20,11 +20,16 @@ case "${1:-toggle}" in
     [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound close || true
     ;;
   toggle)
-    was=$( [ -f "$FLAG" ] && echo 1 || echo 0 )
-    omarchy-shell shell toggle "$PLUGIN_ID" '{}'
-    if [ -f "$FLAG" ]; then rm -f "$FLAG"; else touch "$FLAG"; fi
-    if [ -x "$HOME/.local/bin/minecraft-sound" ]; then
-      if [ "$was" = "1" ]; then minecraft-sound close; else minecraft-sound open; fi
+    # Drive shell state from our FLAG (not shell toggle) so a missed hide
+    # cannot permanently invert the keybind.
+    if [ -f "$FLAG" ]; then
+      omarchy-shell shell hide "$PLUGIN_ID"
+      rm -f "$FLAG"
+      [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound close || true
+    else
+      omarchy-shell shell summon "$PLUGIN_ID" '{}'
+      touch "$FLAG"
+      [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound open || true
     fi
     ;;
   status)

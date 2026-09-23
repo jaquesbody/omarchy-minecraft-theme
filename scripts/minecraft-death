@@ -18,12 +18,14 @@ case "${1:-toggle}" in
     rm -f "$FLAG"
     ;;
   toggle)
-    was=$( [ -f "$FLAG" ] && echo 1 || echo 0 )
-    omarchy-shell shell toggle "$PLUGIN_ID" '{}'
-    if [ -f "$FLAG" ]; then rm -f "$FLAG"; else touch "$FLAG"; fi
-    # Death sting plays inside the plugin on open; only click on close.
-    if [ "$was" = "1" ] && [ -x "$HOME/.local/bin/minecraft-sound" ]; then
-      minecraft-sound click
+    if [ -f "$FLAG" ]; then
+      omarchy-shell shell hide "$PLUGIN_ID"
+      rm -f "$FLAG"
+      [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound click || true
+    else
+      omarchy-shell shell summon "$PLUGIN_ID" '{}'
+      touch "$FLAG"
+      # death.wav plays inside the plugin open()
     fi
     ;;
   status)

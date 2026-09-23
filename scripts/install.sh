@@ -130,14 +130,7 @@ o.bind("SUPER + SHIFT + D", "Minecraft Death Power Menu", os.getenv("HOME") .. "
 LUA
   echo "  -> added SUPER+SHIFT+D binding to bindings.lua"
 fi
-if [ -f "$BINDINGS" ] && ! grep -q "minecraft-splash" "$BINDINGS" 2>/dev/null; then
-  cat >> "$BINDINGS" << 'LUA'
-
--- Minecraft Theme: SUPER+SHIFT+X shows a yellow splash line
-o.bind("SUPER + SHIFT + X", "Minecraft Splash Text", os.getenv("HOME") .. "/.local/bin/minecraft-splash")
-LUA
-  echo "  -> added SUPER+SHIFT+X binding to bindings.lua"
-fi
+# Splash has no keybind — SUPER+SHIFT+X is Omarchy's default X app.
 
 # 6. Font (Monocraft) — warn if missing
 if ! fc-list | grep -qi monocraft; then
@@ -150,5 +143,5 @@ echo "==> Done. Apply with:  omarchy theme set $THEME_NAME"
 echo "    Toggle with:       SUPER+M   (or minecraft-theme-toggle)"
 echo "    HUD / inventory:   SUPER+H / SUPER+E"
 echo "    Steve / death:     SUPER+SHIFT+S / SUPER+SHIFT+D"
-echo "    Splash / toast:    SUPER+SHIFT+X / minecraft-toast"
+echo "    Toast / splash:    minecraft-toast / minecraft-splash"
 echo "    Sounds:            minecraft-sound click|open|close|toast|death"
