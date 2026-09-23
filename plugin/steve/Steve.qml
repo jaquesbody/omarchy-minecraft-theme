@@ -341,7 +341,6 @@ Item {
     ".hssssssssssh.",
     ".hsssnnnnsssh.",
     ".hsMMssssMMsh.",
-    ".hsssMMMMMssh.",
     ".hssssssssssh.",
     ".bbssssssssbb.",
     ".bbMMMMMMMMbb.",
