@@ -1,13 +1,39 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 
 Item {
   id: root
 
   property bool opened: false
-  function open(payload) { opened = true }
-  function close() { opened = false }
+  property var shell: null
+  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
+
+  function open(payload) {
+    var p = {}
+    try {
+      p = typeof payload === "string" && payload ? JSON.parse(payload) : (payload || {})
+    } catch (e) {}
+    opened = true
+    if (p && p.tab !== undefined) {
+      var ti = Number(p.tab)
+      if (ti >= 0 && ti < menuTabs.length) {
+        selectedTab = ti
+        menuPath = p.path ? p.path : []
+        if (menuTabs[ti].route === "apps") loadApps()
+        if (invCanvas) invCanvas.requestPaint()
+      }
+    }
+    if (appRefreshTimer) appRefreshTimer.restart()
+  }
+  function close() {
+    opened = false
+    selectedTab = -1
+    menuPath = []
+    hoveredSlot = -1
+    hideTip()
+  }
 
   property int guiScale: 2
   property int hoveredSlot: -1
@@ -15,6 +41,153 @@ Item {
   property real tipX: 0
   property real tipY: 0
   property bool tipVisible: false
+
+  // Menu tab state: -1 = classic inventory; >=0 shows that route's children.
+  property int selectedTab: -1
+  onSelectedTabChanged: {
+    if (invCanvas) invCanvas.requestPaint()
+  }
+  property var menuPath: []
+  onMenuPathChanged: {
+    if (invCanvas) invCanvas.requestPaint()
+  }
+  property var menuTree: []
+  property var appRows: []
+  readonly property var appLibrary: root.shell ? root.shell.appLibrary : null
+
+  function menuItems() {
+    if (selectedTab < 0) return []
+    var tab = menuTabs[selectedTab]
+    var node = menuTree[selectedTab]
+    if (!tab || !node) return []
+    // node = [route, icon, label, children]
+    var kids = node[3] || []
+    var cur = kids
+    for (var p = 0; p < menuPath.length; p++) {
+      var idx = menuPath[p]
+      if (!cur[idx]) return []
+      cur = cur[idx][4] || []
+    }
+    return cur
+  }
+
+  function menuItemAt(i) {
+    var items = menuItems()
+    if (i < 0 || i >= items.length) return null
+    return items[i]
+  }
+
+  function menuTitle() {
+    if (selectedTab < 0) return ""
+    var tab = menuTabs[selectedTab]
+    var label = tab ? tab.label : ""
+    var items = menuItems()
+    if (menuPath.length && items.length === 0) {
+      // parent label from path walk
+      var node = menuTree[selectedTab]
+      var kids = node ? (node[3] || []) : []
+      for (var p = 0; p < menuPath.length; p++) {
+        if (!kids[menuPath[p]]) break
+        label = kids[menuPath[p]][1]
+        kids = kids[menuPath[p]][4] || []
+      }
+    } else if (menuPath.length) {
+      var n2 = menuTree[selectedTab]
+      var k2 = n2 ? (n2[3] || []) : []
+      for (var q = 0; q < menuPath.length; q++) {
+        if (!k2[menuPath[q]]) break
+        k2 = k2[menuPath[q]][4] || []
+      }
+      // title stays tab label; header icon is tab icon
+    }
+    return label
+  }
+
+  function currentMenuChildren() {
+    if (selectedTab < 0) return []
+    var node = menuTree[selectedTab]
+    if (!node) return []
+    var kids = node[3] || []
+    var cur = kids
+    for (var p = 0; p < menuPath.length; p++) {
+      if (!cur[menuPath[p]]) return []
+      cur = cur[menuPath[p]][4] || []
+    }
+    return cur
+  }
+
+  function launchMenuItem(i) {
+    var items = menuItems()
+    var it = items[i]
+    if (!it) return
+    var action = String(it[2] || "")
+    var provider = String(it[3] || "")
+    var kids = it[4] || []
+    if (kids.length > 0) {
+      menuPath = menuPath.concat([i])
+      invCanvas.requestPaint()
+      return
+    }
+    if (provider === "apps") return
+    if (action.length) {
+      Quickshell.execDetached(["bash", "-lc", action])
+      root.close()
+      return
+    }
+    // Non-actionable leaf (submenu without children in snapshot) — no-op
+  }
+
+  function goBackMenu() {
+    if (menuPath.length > 0) {
+      menuPath = menuPath.slice(0, menuPath.length - 1)
+      invCanvas.requestPaint()
+      return true
+    }
+    return false
+  }
+
+  function loadApps() {
+    if (!appLibrary) return
+    try {
+      var rows = appLibrary.sortedEntries("")
+      var out = []
+      for (var i = 0; i < rows.length; i++) {
+        var e = rows[i].entry
+        var id = String(e.id || "")
+        if (!id) continue
+        out.push({
+          name: appLibrary.entryName(e),
+          id: id,
+          sub: appLibrary.entrySubtext(e)
+        })
+      }
+      appRows = out
+      if (opened) invCanvas.requestPaint()
+    } catch (err) {}
+  }
+
+  Timer {
+    id: appRefreshTimer
+    interval: 50
+    onTriggered: root.loadApps()
+  }
+
+  Connections {
+    target: root.appLibrary
+    function onAppsChanged() { root.loadApps() }
+    enabled: root.appLibrary !== null
+  }
+
+  FileView {
+    id: menuFile
+    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.jaquesbody.minecraft-inventory/menu-data.json"
+    watchChanges: false
+    printErrors: true
+    onLoaded: {
+      try { root.menuTree = JSON.parse(text()) } catch (e) { root.menuTree = [] }
+      if (opened) invCanvas.requestPaint()
+    }
+  }
 
   function showTip(text, x, y) {
     tipText = String(text || "")
@@ -77,18 +250,18 @@ Item {
   readonly property int panelW: 176
   readonly property int panelH: hotbarY + pitch + pad
 
-  // Omarchy menu root tabs (same routes as omarchy-menu.jsonc).
+  // Omarchy menu root tabs — nerd-font glyphs from omarchy-menu.jsonc icons.
   readonly property var menuTabs: [
-    { route: "apps", label: "Apps" },
-    { route: "learn", label: "Learn" },
-    { route: "trigger", label: "Trig" },
-    { route: "style", label: "Style" },
-    { route: "setup", label: "Set" },
-    { route: "install", label: "Inst" },
-    { route: "remove", label: "Rem" },
-    { route: "update", label: "Upd" },
-    { route: "about", label: "Info" },
-    { route: "system", label: "Sys" }
+    { route: "apps", icon: "\u{f003b}", label: "Apps" },
+    { route: "learn", icon: "\u{f09d1}", label: "Learn" },
+    { route: "trigger", icon: "\u{f14de}", label: "Trigger" },
+    { route: "style", icon: "\u{ebcf}", label: "Style" },
+    { route: "setup", icon: "\u{e615}", label: "Setup" },
+    { route: "install", icon: "\u{f0249}", label: "Install" },
+    { route: "remove", icon: "\u{f0b4c}", label: "Remove" },
+    { route: "update", icon: "\u{f021}", label: "Update" },
+    { route: "about", icon: "\u{ea74}", label: "About" },
+    { route: "system", icon: "\u{f011}", label: "System" }
   ]
   property int hoveredTab: -1
 
@@ -101,9 +274,23 @@ Item {
     return (i >= 0 && i < n) ? i : -1
   }
   function openTab(i) {
-    var t = menuTabs[i]
-    if (t && t.route)
-      Quickshell.execDetached(["omarchy", "menu", "summon", t.route])
+    i = Number(i)
+    if (!(i >= 0 && i < menuTabs.length)) return
+    if (selectedTab === i) {
+      // Second click on active tab: leave submenus, then deselect to classic.
+      if (menuPath.length > 0) {
+        menuPath = []
+      } else {
+        selectedTab = -1
+      }
+    } else {
+      selectedTab = i
+      menuPath = []
+      if (menuTabs[i].route === "apps") root.loadApps()
+    }
+    hoveredSlot = -1
+    hideTip()
+    invCanvas.requestPaint()
   }
 
   // Slot indexes: 0-3 armor, 4-7 craft, 8 result, 9-35 main (27), 36-44 hotbar (9)
@@ -117,16 +304,16 @@ Item {
   // Compact brand sprites (also used for hotbar row). Defined before `slots`.
   readonly property var gridBrave: [
     "..ooooo..",
-    ".oWWWWoo.",
-    ".oWWoooo.",
-    ".oWooooo.",
-    ".oWooooo.",
-    ".oWWoooo.",
-    ".ooooWWo.",
-    "..ooooo..",
+    ".ooooooo.",
+    ".ooooooo.",
+    ".ooooooo.",
+    ".ooooooo.",
+    ".ooooooo.",
+    "...ooo...",
+    "....o....",
     "........."
   ]
-  readonly property var mapBrave: { "o": "#fb542b", "W": "#ffffff", ".": "#00000000" }
+  readonly property var mapBrave: { "o": "#fb542b", "#": "#3a1004", ".": "#00000000" }
 
   readonly property var gridTerminal: [
     "#########",
@@ -184,14 +371,14 @@ Item {
     "#########",
     "#wwwwwww#",
     "#wWwwwWw#",
-    "#wWWwWWw#",
-    "#wwwvwww#",
-    "#wwwvwww#",
-    "#wwvvwww#",
     "#wWwwwWw#",
+    "#wwWwWww#",
+    "#wwwWwww#",
+    "#wwwWwww#",
+    "#wwwWwww#",
     "#########"
   ]
-  readonly property var mapYakihonne: { "#": "#4a0848", "w": "#f7f2f7", "W": "#840c84", "v": "#b44bdb" }
+  readonly property var mapYakihonne: { "#": "#4a0848", "w": "#f7f2f7", "W": "#840c84" }
 
   readonly property var gridFiles: [
     ".bb......",
@@ -676,7 +863,48 @@ Item {
     return { x: -1, y: -1 }
   }
 
+  readonly property int menuGridX: pad
+  readonly property int menuGridY: 28 + tabH
+  readonly property int menuCols: 9
+  readonly property int menuRowsMax: 5
+
+  function hitMenuSlot(px, py) {
+    if (selectedTab < 0) return -1
+    if (root.menuTabs[selectedTab].route === "apps") {
+      // apps: same grid geometry over appRows
+    }
+    var y0 = menuGridY
+    var x0 = menuGridX
+    if (px < x0 || py < y0) return -1
+    var col = Math.floor((px - x0) / pitch)
+    var row = Math.floor((py - y0) / pitch)
+    if (col < 0 || col >= menuCols || row < 0 || row >= menuRowsMax) return -1
+    if (px >= x0 + col * pitch + slot || py >= y0 + row * pitch + slot) {
+      // allow full pitch cell for hover feel; only reject past end of slot slightly
+    }
+    var count = (root.menuTabs[selectedTab].route === "apps")
+      ? root.appRows.length : root.menuItems().length
+    var idx = row * menuCols + col
+    return (idx >= 0 && idx < count) ? idx : -1
+  }
+
+  function menuSlotOrigin(i) {
+    var col = i % menuCols
+    var row = Math.floor(i / menuCols)
+    return { x: menuGridX + col * pitch, y: menuGridY + row * pitch }
+  }
+
+  function menuSlotLabel(i) {
+    if (root.menuTabs[selectedTab].route === "apps") {
+      var a = root.appRows[i]
+      return a ? a.name : ""
+    }
+    var it = root.menuItemAt(i)
+    return it ? String(it[1] || "") : ""
+  }
+
   function hitSlot(px, py) {
+    if (selectedTab >= 0) return -1
     // px, py in base units
     for (var i = 0; i < slotCount; i++) {
       var o = slotOrigin(i)
@@ -745,21 +973,29 @@ Item {
             var by = mouse.y / panel.s
             var ti = root.hitTab(bx, by)
             root.hoveredTab = ti
-            var i = (ti >= 0) ? -1 : root.hitSlot(bx, by)
-            root.hoveredSlot = i
+            var i = -1
+            var label = ""
+            var origin = null
             if (ti >= 0) {
-              root.hideTip()
+              i = -1
               var t = root.menuTabs[ti]
-              if (t) root.showTip(t.route, panel.ox + (bx) * panel.s, panel.oy + root.tabH * panel.s)
-            } else if (i >= 0) {
-              var it = root.slots[i]
-              var label = it ? it.name : ""
-              if (label) {
-                var o = root.slotOrigin(i)
-                root.showTip(label, panel.ox + (o.x + 8) * panel.s, panel.oy + o.y * panel.s - 4 * panel.s)
-              } else {
-                root.hideTip()
+              label = t ? t.label : ""
+              origin = { x: bx, y: 0 }
+            } else if (root.selectedTab >= 0) {
+              i = root.hitMenuSlot(bx, by)
+              label = (i >= 0) ? root.menuSlotLabel(i) : ""
+              origin = (i >= 0) ? root.menuSlotOrigin(i) : null
+            } else {
+              i = root.hitSlot(bx, by)
+              if (i >= 0) {
+                var it = root.slots[i]
+                label = it ? it.name : ""
+                origin = root.slotOrigin(i)
               }
+            }
+            root.hoveredSlot = i
+            if (label && origin) {
+              root.showTip(label, panel.ox + (origin.x + 8) * panel.s, panel.oy + origin.y * panel.s - 4 * panel.s)
             } else {
               root.hideTip()
             }
@@ -774,6 +1010,25 @@ Item {
             var ti = root.hitTab(bx, by)
             if (ti >= 0) {
               root.openTab(ti)
+              return
+            }
+            if (root.selectedTab >= 0) {
+              var mi = root.hitMenuSlot(bx, by)
+              if (mi >= 0) {
+                if (root.menuTabs[root.selectedTab].route === "apps") {
+                  var a = root.appRows[mi]
+                  if (a && root.appLibrary) {
+                    root.appLibrary.launch(a.id, a.name)
+                    root.close()
+                  }
+                } else {
+                  root.launchMenuItem(mi)
+                }
+                return
+              }
+              // Back affordance: click header row under tabs
+              if (by >= root.tabH && by < root.tabH + 14 && root.goBackMenu())
+                return
               return
             }
             var i = root.hitSlot(bx, by)
@@ -818,14 +1073,19 @@ Item {
             ctx.fillRect(px, py + ph - 2 * s, pw, s)
             ctx.fillRect(px + pw - 2 * s, py, s, ph)
 
-            // Title
+            // Title — shows selected tab label + glyph when a menu tab is active
             ctx.fillStyle = "#404040"
             ctx.font = "bold " + String(8 * s) + "px Monocraft, monospace"
             ctx.textAlign = "left"
             ctx.textBaseline = "top"
-            ctx.fillText("Inventory", root.pad * s, root.titleY * s)
+            if (root.selectedTab >= 0) {
+              var activeTab = root.menuTabs[root.selectedTab]
+              ctx.fillText(activeTab.icon + "  " + root.menuTitle(), root.pad * s, root.titleY * s)
+            } else {
+              ctx.fillText("Inventory", root.pad * s, root.titleY * s)
+            }
 
-            // Omarchy menu tabs (top strip)
+            // Omarchy menu tabs (top strip) — glyph icons; selected = greyed
             var n = root.menuTabs.length
             var gap = 1
             var tw = (root.panelW - 4 - gap * (n - 1)) / n
@@ -835,22 +1095,34 @@ Item {
               var tww = tw * s
               var thh = (root.tabH - 4) * s
               var hot = root.hoveredTab === t
-              ctx.fillStyle = hot ? "#b0b0b0" : "#8b8b8b"
+              var selected = Number(root.selectedTab) === t
+              if (selected) {
+                // Greyed-out to denote in use
+                ctx.fillStyle = hot ? "#6a6a6a" : "#5a5a5a"
+              } else {
+                ctx.fillStyle = hot ? "#b0b0b0" : "#8b8b8b"
+              }
               ctx.fillRect(tx, ty, tww, thh)
-              ctx.fillStyle = "#373737"
+              ctx.fillStyle = selected ? "#2a2a2a" : "#373737"
               ctx.fillRect(tx, ty, tww, s)
               ctx.fillRect(tx, ty, s, thh)
-              ctx.fillStyle = "#ffffff"
+              ctx.fillStyle = selected ? "#888888" : "#ffffff"
               ctx.fillRect(tx, ty + thh - s, tww, s)
               ctx.fillRect(tx + tww - s, ty, s, thh)
-              ctx.fillStyle = hot ? "#ffffff" : "#202020"
-              ctx.font = "bold " + String(5 * s) + "px Monocraft, monospace"
+              ctx.fillStyle = selected ? "#c0c0c0" : (hot ? "#ffffff" : "#202020")
+              ctx.font = "bold " + String(6 * s) + "px Symbols Nerd Font, Monocraft, monospace"
               ctx.textAlign = "center"
               ctx.textBaseline = "middle"
-              ctx.fillText(root.menuTabs[t].label, tx + tww / 2, ty + thh / 2)
+              ctx.fillText(root.menuTabs[t].icon, tx + tww / 2, ty + thh / 2)
             }
             ctx.textAlign = "left"
             ctx.textBaseline = "top"
+
+            // When a tab is selected, draw its menu list instead of classic slots
+            if (root.selectedTab >= 0) {
+              drawMenuView(ctx, s)
+              return
+            }
 
             // Player preview well (original stub pixel figure — M5 Steve replaces)
             var plx = root.playerX * s
@@ -928,6 +1200,92 @@ Item {
                 ctx.textBaseline = "top"
               }
             }
+          }
+
+          function drawMenuView(ctx, s) {
+            var isApps = root.menuTabs[root.selectedTab].route === "apps"
+            var items = isApps ? root.appRows : root.menuItems()
+            var count = items.length
+
+            // Back chip when drilled into a submenu
+            if (root.menuPath.length > 0) {
+              ctx.fillStyle = "#6a6a6a"
+              ctx.fillRect(root.pad * s, (root.tabH + 4) * s, 28 * s, 10 * s)
+              ctx.fillStyle = "#ffffff"
+              ctx.font = "bold " + String(6 * s) + "px Monocraft, monospace"
+              ctx.textAlign = "left"
+              ctx.textBaseline = "middle"
+              ctx.fillText("\u2190 Back", (root.pad + 3) * s, (root.tabH + 9) * s)
+            }
+
+            var y0 = root.menuGridY
+            var x0 = root.menuGridX
+            var maxShow = root.menuCols * root.menuRowsMax
+
+            if (count === 0) {
+              ctx.fillStyle = "#505050"
+              ctx.font = String(7 * s) + "px Monocraft, monospace"
+              ctx.textAlign = "left"
+              ctx.textBaseline = "top"
+              var msg = isApps ? (root.appLibrary ? "Loading apps..." : "Apps unavailable")
+                             : "No items"
+              ctx.fillText(msg, x0 * s, (y0 + 8) * s)
+              return
+            }
+
+            var show = Math.min(count, maxShow)
+            for (var i = 0; i < show; i++) {
+              var o = root.menuSlotOrigin(i)
+              drawSlotFrame(ctx, o.x * s, o.y * s, root.slot * s, s, false)
+              if (i === root.hoveredSlot) {
+                ctx.fillStyle = "rgba(255, 255, 255, 0.35)"
+                ctx.fillRect(o.x * s, o.y * s, root.slot * s, root.slot * s)
+              }
+
+              if (isApps) {
+                // Letter tile fallback for apps (icons via shell API not drawn on canvas)
+                var a = root.appRows[i]
+                ctx.fillStyle = "#e8e8f0"
+                ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
+                ctx.textAlign = "center"
+                ctx.textBaseline = "middle"
+                var ch = a && a.name ? a.name.charAt(0).toUpperCase() : "?"
+                ctx.fillText(ch, (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
+              } else {
+                var it = root.menuItemAt(i)
+                if (it && it[0]) {
+                  // Glyph icon from omarchy menu
+                  ctx.fillStyle = "#202020"
+                  ctx.font = "bold " + String(8 * s) + "px Symbols Nerd Font, Monocraft, monospace"
+                  ctx.textAlign = "center"
+                  ctx.textBaseline = "middle"
+                  ctx.fillText(it[0], (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
+                } else if (it && it[1]) {
+                  ctx.fillStyle = "#e8e8f0"
+                  ctx.font = "bold " + String(6 * s) + "px Monocraft, monospace"
+                  ctx.textAlign = "center"
+                  ctx.textBaseline = "middle"
+                  ctx.fillText(String(it[1]).charAt(0).toUpperCase(), (o.x + root.slot / 2) * s, (o.y + root.slot / 2) * s)
+                }
+                // Folder / has-children marker
+                if (it && it[4] && it[4].length) {
+                  ctx.fillStyle = "#ffd43b"
+                  ctx.fillRect((o.x + root.slot - 5) * s, (o.y + root.slot - 5) * s, 3 * s, 3 * s)
+                }
+              }
+            }
+
+            // Truncation note
+            if (count > show) {
+              ctx.fillStyle = "#505050"
+              ctx.font = String(6 * s) + "px Monocraft, monospace"
+              ctx.textAlign = "left"
+              ctx.textBaseline = "top"
+              ctx.fillText("+" + (count - show) + " more", x0 * s, (y0 + root.menuRowsMax * root.pitch + 4) * s)
+            }
+
+            ctx.textAlign = "left"
+            ctx.textBaseline = "top"
           }
 
           function drawSlotFrame(ctx, x, y, sz, s, selected) {

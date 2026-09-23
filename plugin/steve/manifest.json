@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "jaquesbody",
   "license": "MIT",
-  "description": "Floating blocky companion character with idle blink. Toggle with SUPER+SHIFT+S.",
+  "description": "Floating Steve companion with live cursor Position X,Y. Toggle with SUPER+H (with HUD).",
   "kinds": [
     "panel"
   ],

@@ -5,9 +5,10 @@
   "version": "1.0.0",
   "author": "jaquesbody",
   "license": "MIT",
-  "description": "Minecraft-style inventory panel with app launchers. Toggle with SUPER+E.",
+  "description": "Minecraft-style inventory panel with Omarchy menu tabs. Toggle with SUPER+E.",
   "kinds": [
-    "panel"
+    "panel",
+    "menu"
   ],
   "keepLoaded": true,
   "entryPoints": {

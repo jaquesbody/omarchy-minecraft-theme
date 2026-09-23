@@ -224,26 +224,25 @@ Item {
 
   // --- Slot items: OG app icons, simply pixelated — sized to fill a 20×20 cell ---
 
-  // 0. Brave — orange shield, white lion wing
+  // 0. Brave — plain orange shield
   readonly property var gridBrave: [
     "....#######...",
-    "..##ooooooo#..",
-    ".#oooooooooo#.",
-    ".#ooWWWWWWoo#.",
-    ".#oWWooooWWoo#",
-    ".#oWoooooWoo#.",
-    ".#oWoooooWoo#.",
-    ".#oWoooooWoo#.",
-    ".#ooWWooooWWo#",
-    ".#ooooooooooo#",
-    ".#ooooWWWWooo#",
+    "...#ooooooo#..",
     "..#ooooooooo#.",
-    "...#########.."
+    "..#ooooooooo#.",
+    "..#ooooooooo#.",
+    "..#ooooooooo#.",
+    "..#ooooooooo#.",
+    "..#ooooooooo#.",
+    "..#ooooooooo#.",
+    "...#ooooooo#..",
+    "....#ooooo#...",
+    ".....#ooo#....",
+    "......###....."
   ]
   readonly property var mapBrave: {
     "#": "#3a1004",
-    "o": "#fb542b",
-    "W": "#ffffff"
+    "o": "#fb542b"
   }
 
   // 1. Terminal (foot) — dark screen, green prompt + block cursor. All rows 13 wide.
@@ -330,18 +329,18 @@ Item {
     ".": "#0d0d0d"
   }
 
-  // 5. Yakihonne — white tile, purple Y + orbit
+  // 5. Yakihonne — white tile, simple purple Y
   readonly property var gridYakihonne: [
     "#############",
     "#wwwwwwwwwww#",
     "#wWwwwwwWwww#",
-    "#wWWwwwWWwww#",
-    "#wwWWvWWwwww#",
-    "#wwwvVvwwwww#",
-    "#wwwvVwwwwww#",
-    "#wwvvVvwwwww#",
-    "#wWwwwWwwwww#",
     "#wWwwwwwWwww#",
+    "#wwWwwwwWwww#",
+    "#wwwWwwWwwww#",
+    "#wwwwWWWwwww#",
+    "#wwwwwwWwwww#",
+    "#wwwwwwWwwww#",
+    "#wwwwwwWwwww#",
     "#wwwwwwwwwww#",
     "#wwwwwwwwwww#",
     "#############"
@@ -349,9 +348,7 @@ Item {
   readonly property var mapYakihonne: {
     "#": "#4a0848",
     "w": "#f7f2f7",
-    "W": "#840c84",
-    "v": "#b44bdb",
-    "V": "#6a0a6a"
+    "W": "#840c84"
   }
 
   // 6. Files — blue folder with raised tab
@@ -689,7 +686,7 @@ Item {
         x: 0
         y: panel.xpY - hitRoot.y
         width: panel.hotbarW
-        height: Math.max(panel.xpH, 18 * panel.s)
+        height: panel.xpH
         hoverEnabled: true
         onContainsMouseChanged: {
           if (containsMouse && root.batteryPresent)
@@ -836,7 +833,7 @@ Item {
         ctx.font = "bold " + String(7 * s) + "px Monocraft, monospace"
         ctx.textAlign = "center"
         ctx.textBaseline = "middle"
-        ctx.fillText("[E] inventory", bx + bw / 2, by + bh / 2)
+        ctx.fillText("[SUPER+E] inventory", bx + bw / 2, by + bh / 2)
         ctx.textAlign = "start"
         ctx.textBaseline = "alphabetic"
       }
@@ -845,7 +842,7 @@ Item {
     // Battery % sits ABOVE the XP bar line (not on the bar).
     Text {
       id: xpLevelText
-      z: 10
+      z: 8
       visible: root.opened && root.batteryPresent
       text: String(root.xpLevel) + "%"
       color: "#80ff20"
@@ -860,11 +857,11 @@ Item {
       y: panel.xpY - height - Math.round(panel.s * 0.5)
     }
 
-    // Hover tooltip bubble — visual only, kept below hitRoot (z:10) so it never
-    // participates in the input region / steals clicks.
+    // Hover tooltip bubble — visual only (no MouseArea). Sits above canvas
+    // and battery % text but below hitRoot so it never steals clicks.
     Rectangle {
       id: tipBubble
-      z: 5
+      z: 9
       visible: root.opened && root.tipVisible
       color: Qt.rgba(15 / 255, 15 / 255, 18 / 255, 0.95)
       border.color: "#000000"

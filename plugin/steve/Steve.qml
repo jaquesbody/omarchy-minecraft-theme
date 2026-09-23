@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import Quickshell.Io
 
 Item {
   id: root
@@ -8,20 +9,49 @@ Item {
   property bool opened: false
   function open(payload) {
     opened = true
-    try {
-      var p = typeof payload === "string" && payload ? JSON.parse(payload) : (payload || {})
-      if (p && p.x !== undefined) anchorX = Number(p.x) || anchorX
-      if (p && p.y !== undefined) anchorY = Number(p.y) || anchorY
-    } catch (e) {}
+    cursorTimer.start()
+    pollCursor()
   }
-  function close() { opened = false }
+  function close() {
+    opened = false
+    cursorTimer.stop()
+  }
 
-  property int guiScale: 2
-  // Base units from left; anchorY is negative offset up from bottom edge.
+  property int guiScale: 3
   property int anchorX: 8
-  property int anchorY: -80
+  property int anchorY: 8
+  property int cursorX: 0
+  property int cursorY: 0
   property bool blinking: false
   property int bobPhase: 0
+
+  Timer {
+    id: cursorTimer
+    interval: 250
+    repeat: true
+    running: root.opened
+    onTriggered: root.pollCursor()
+  }
+
+  function pollCursor() {
+    cursorProc.running = false
+    cursorProc.running = true
+  }
+
+  Process {
+    id: cursorProc
+    running: false
+    command: ["hyprctl", "cursorpos"]
+    stdout: StdioCollector {
+      onTextChanged: {
+        var parts = text.trim().split(/[,\s]+/)
+        if (parts.length >= 2) {
+          root.cursorX = Number(parts[0]) || 0
+          root.cursorY = Number(parts[1]) || 0
+        }
+      }
+    }
+  }
 
   Timer {
     id: blinkTimer
@@ -45,8 +75,102 @@ Item {
     onTriggered: root.bobPhase = (root.bobPhase + 1) % 2
   }
 
-  onBlinkingChanged: steveCanvas.requestPaint()
-  onBobPhaseChanged: steveCanvas.requestPaint()
+  PanelWindow {
+    id: panel
+    visible: root.opened
+    anchors { top: true; bottom: true; left: true; right: true }
+    color: "transparent"
+    WlrLayershell.namespace: "minecraft-steve"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+    exclusionMode: ExclusionMode.Ignore
+    mask: Region { item: steveArea }
+
+    readonly property int s: root.guiScale
+    readonly property int steveW: Math.floor(48 * s / 2)
+    readonly property int steveH: Math.floor(59 * s / 2)
+    readonly property int textH: 22 * s
+
+    Item {
+      id: screen
+      anchors.fill: parent
+
+      Item {
+        id: steveArea
+        width: Math.max(panel.steveW, 140 * panel.s / 2)
+        height: panel.steveH + panel.textH + 6 * panel.s
+        x: root.anchorX * panel.s
+        y: root.anchorY * panel.s + root.bobPhase * panel.s
+
+        MouseArea {
+          anchors.fill: parent
+          hoverEnabled: true
+          onClicked: Quickshell.execDetached([
+            "omarchy-shell", "shell", "summon",
+            "io.github.jaquesbody.minecraft-inventory", "{}"
+          ])
+        }
+
+        Image {
+          id: steveImg
+          anchors.horizontalCenter: parent.horizontalCenter
+          anchors.top: parent.top
+          width: panel.steveW
+          height: panel.steveH
+          source: Qt.resolvedUrl("steve.png")
+          fillMode: Image.PreserveAspectFit
+          sourceSize: Qt.size(48, 59)
+          smooth: false
+          mipmap: false
+          asynchronous: false
+          visible: status === Image.Ready
+        }
+
+        Canvas {
+          id: steveFallback
+          anchors.fill: steveImg
+          visible: steveImg.status !== Image.Ready
+          onWidthChanged: requestPaint()
+          onHeightChanged: requestPaint()
+          Component.onCompleted: requestPaint()
+          onPaint: {
+            var ctx = getContext("2d")
+            ctx.clearRect(0, 0, width, height)
+            if (width <= 0 || height <= 0) return
+            var s = Math.max(1, Math.floor(width / 14))
+            var rows = root.blinking ? root.gridBlink : root.gridOpen
+            root.paintGrid(ctx, 0, 0, s, rows, root.steveMap)
+          }
+        }
+
+        Column {
+          id: posCol
+          anchors.top: steveImg.bottom
+          anchors.topMargin: 4 * panel.s
+          anchors.horizontalCenter: parent.horizontalCenter
+          spacing: 1 * panel.s
+
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: "Position X, Y"
+            color: "#ffffff"
+            style: Text.Outline
+            styleColor: "#000000"
+            font { family: "Monocraft"; pixelSize: 7 * panel.s }
+          }
+
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: root.cursorX + ", " + root.cursorY
+            color: "#ffffff"
+            style: Text.Outline
+            styleColor: "#000000"
+            font { family: "Monocraft"; pixelSize: 7 * panel.s }
+          }
+        }
+      }
+    }
+  }
 
   function paintGrid(ctx, ox, oy, s, rows, cmap) {
     for (var r = 0; r < rows.length; r++) {
@@ -60,8 +184,6 @@ Item {
     }
   }
 
-  // Original 14×20 blocky companion (not a Mojang asset). All rows length 14.
-  // Clearer face: hair fringe, eye whites + blue irises, nose, smile.
   readonly property var gridOpen: [
     "....hhhhhh....",
     "...hhhhhhhh...",
@@ -119,60 +241,5 @@ Item {
     "b": "#c8a27a",
     "p": "#4a3fa0",
     ".": "#00000000"
-  }
-
-  PanelWindow {
-    id: panel
-    visible: root.opened
-    anchors { top: true; bottom: true; left: true; right: true }
-    color: "transparent"
-    WlrLayershell.namespace: "minecraft-steve"
-    WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-    exclusionMode: ExclusionMode.Ignore
-    mask: Region { item: steveArea }
-
-    readonly property int s: root.guiScale
-    readonly property int steveW: 14 * s
-    readonly property int steveH: 20 * s
-
-    // Full-size coordinate space (PanelWindow content may not report height early)
-    Item {
-      id: screen
-      anchors.fill: parent
-
-      Item {
-        id: steveArea
-        width: panel.steveW
-        height: panel.steveH
-        x: root.anchorX * panel.s
-        y: screen.height - height - Math.max(0, -root.anchorY) * panel.s + root.bobPhase * panel.s
-
-        MouseArea {
-          anchors.fill: parent
-          hoverEnabled: true
-          onClicked: Quickshell.execDetached([
-            "omarchy-shell", "shell", "summon",
-            "io.github.jaquesbody.minecraft-inventory", "{}"
-          ])
-        }
-
-        Canvas {
-          id: steveCanvas
-          anchors.fill: parent
-          onWidthChanged: requestPaint()
-          onHeightChanged: requestPaint()
-          Component.onCompleted: requestPaint()
-          onPaint: {
-            var ctx = getContext("2d")
-            ctx.clearRect(0, 0, width, height)
-            if (width <= 0 || height <= 0) return
-            var s = panel.s
-            var rows = root.blinking ? root.gridBlink : root.gridOpen
-            root.paintGrid(ctx, 0, 0, s, rows, root.steveMap)
-          }
-        }
-      }
-    }
   }
 }

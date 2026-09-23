@@ -1,35 +1,41 @@
 #!/bin/bash
-# Minecraft HUD (hotbar + hearts + XP) toggle — bound to SUPER+H.
+# Minecraft HUD (hotbar + hearts + XP) + Steve companion toggle — bound to SUPER+H.
 # Talks to the Quickshell plugin via omarchy-shell IPC.
 set -euo pipefail
 
 export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
 PLUGIN_ID="io.github.jaquesbody.minecraft-hud"
+STEVE_ID="io.github.jaquesbody.minecraft-steve"
 STATE_DIR="$HOME/.local/state/minecraft-theme"
 mkdir -p "$STATE_DIR"
 FLAG="$STATE_DIR/overlay-active"
+SND_OK() { [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound "$1" || true; }
 
 case "${1:-toggle}" in
   show)
     omarchy-shell shell summon "$PLUGIN_ID" '{}'
+    omarchy-shell shell summon "$STEVE_ID" '{}'
     touch "$FLAG"
-    [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound open || true
+    SND_OK open
     ;;
   hide)
     omarchy-shell shell hide "$PLUGIN_ID"
+    omarchy-shell shell hide "$STEVE_ID"
     rm -f "$FLAG"
-    [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound close || true
+    SND_OK close
     ;;
   toggle)
     # FLAG drives shell (summon/hide) so keybind cannot invert.
     if [ -f "$FLAG" ]; then
       omarchy-shell shell hide "$PLUGIN_ID"
+      omarchy-shell shell hide "$STEVE_ID"
       rm -f "$FLAG"
-      [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound close || true
+      SND_OK close
     else
       omarchy-shell shell summon "$PLUGIN_ID" '{}'
+      omarchy-shell shell summon "$STEVE_ID" '{}'
       touch "$FLAG"
-      [ -x "$HOME/.local/bin/minecraft-sound" ] && minecraft-sound open || true
+      SND_OK open
     fi
     ;;
   select)
@@ -39,6 +45,7 @@ case "${1:-toggle}" in
       ''|*[!0-8]*) echo "slot must be 0-8"; exit 1 ;;
     esac
     omarchy-shell shell summon "$PLUGIN_ID" "{\"slot\": $slot}"
+    omarchy-shell shell summon "$STEVE_ID" '{}'
     touch "$FLAG"
     ;;
   status)

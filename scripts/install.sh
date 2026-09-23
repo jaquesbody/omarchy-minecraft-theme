@@ -66,6 +66,9 @@ enable_plugin() {
   for qml in "$src"/*.qml; do
     [ -f "$qml" ] && cp "$qml" "$dst/"
   done
+  for img in "$src"/*.png "$src"/*.webp "$src"/*.json; do
+    [ -f "$img" ] && cp "$img" "$dst/"
+  done
   local SHELL_JSON="$HOME/.config/omarchy/shell.json"
   if [ -f "$SHELL_JSON" ] && command -v jq >/dev/null 2>&1; then
     jq --arg id "$id" \
