@@ -288,18 +288,18 @@ Item {
     ".": "#f2f0ec"
   }
 
-  // 3. Obsidian — purple crystal
+  // 3. Obsidian — egg-shaped crystal (narrow top, full bottom)
   readonly property var gridObsidian: [
     "....#....",
     "...#p#...",
     "..#pPp#..",
     ".#pPPPp#.",
+    ".#pPPPp#.",
+    "#pPPPPPp#",
     "#pPPPPPp#",
     "#pPPPPPp#",
     ".#pPPPp#.",
-    "..#pPp#..",
-    "...#p#...",
-    "....#...."
+    "..#pPp#.."
   ]
   readonly property var mapObsidian: {
     "#": "#1a1030",
@@ -417,8 +417,8 @@ Item {
     "W": "#ffffff"
   }
 
-  // 9-slot hotbar: name + launch argv + art. User order.
-  readonly property var slots: [
+  // 9-slot hotbar: name + launch argv + art. Order synced from hotbar.json.
+  property var slots: [
     {
       name: "Brave Search",
       cmd: ["omarchy-launch-browser", "https://search.brave.com"],
@@ -465,6 +465,51 @@ Item {
       rows: root.gridYoutube, colors: root.mapYoutube
     }
   ]
+
+  FileView {
+    id: hotbarOrderFile
+    path: Quickshell.env("HOME") + "/.config/minecraft_theme/hotbar.json"
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.applyHotbarOrder()
+  }
+  function applyHotbarOrder() {
+    try {
+      var o = JSON.parse(text())
+      if (!o || !o.order || o.order.length !== 9) return
+      var byName = {}
+      for (var i = 0; i < slots.length; i++) {
+        if (slots[i] && slots[i].name) byName[slots[i].name] = slots[i]
+      }
+      var used = {}
+      var row = []
+      for (i = 0; i < 9; i++) {
+        var nm = String(o.order[i] || "")
+        if (byName[nm] && !used[nm]) {
+          row.push(byName[nm])
+          used[nm] = true
+        } else {
+          row.push(null)
+        }
+      }
+      var spare = []
+      for (i = 0; i < slots.length; i++) {
+        var s = slots[i]
+        if (s && s.name && !used[s.name]) {
+          spare.push(s)
+          used[s.name] = true
+        }
+      }
+      for (i = 0; i < 9; i++) {
+        if (!row[i] && spare.length) row[i] = spare.shift()
+      }
+      if (row.filter(function(x) { return !!x }).length === 9) {
+        slots = row
+        hud.requestPaint()
+      }
+    } catch (e) {}
+  }
+  Component.onCompleted: hotbarOrderFile.reload()
 
   function launchSlot(i) {
     var sl = slots[i]

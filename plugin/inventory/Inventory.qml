@@ -33,6 +33,10 @@ Item {
     selectedTab = -1
     menuPath = []
     hoveredSlot = -1
+    contextSlot = -1
+    pinnedSlot = -1
+    dragFrom = -1
+    dragging = false
     hideTip()
   }
 
@@ -130,6 +134,12 @@ Item {
       return
     }
     if (provider === "apps") return
+    // Official About (menu-data stores no action for this leaf).
+    if (menuTabs[selectedTab] && menuTabs[selectedTab].route === "about"
+        && action.length === 0) {
+      root.launchAbout()
+      return
+    }
     if (action.length) {
       Quickshell.execDetached(["bash", "-lc", action])
       root.close()
@@ -145,6 +155,23 @@ Item {
       return true
     }
     return false
+  }
+
+  // Right-side back chip geometry (base units) — sits on the title row, right edge.
+  readonly property int backChipW: 34
+  readonly property int backChipH: 11
+  readonly property int backChipX: panelW - pad - backChipW
+  readonly property int backChipY: titleY - 1
+  function hitBack(px, py) {
+    if (menuPath.length <= 0) return false
+    return px >= backChipX && px < backChipX + backChipW
+        && py >= backChipY && py < backChipY + backChipH
+  }
+
+  // About leaf with no children → open Omarchy's official About window.
+  function launchAbout() {
+    Quickshell.execDetached(["omarchy-launch-about"])
+    root.close()
   }
 
   function loadApps() {
@@ -243,6 +270,12 @@ Item {
       Quickshell.execDetached(it.cmd)
   }
 
+  function launchArmorWell(w) {
+    var it = armorWellItem(w)
+    if (it && it.cmd && it.cmd.length)
+      Quickshell.execDetached(it.cmd)
+  }
+
   // --- Inventory layout (base units, * guiScale) ---
   // Classic proportions: 2×2 craft + player/armor strip, 3×9 main, 9 hotbar.
   readonly property int pad: 7
@@ -252,25 +285,208 @@ Item {
   readonly property int mainRows: 3
   readonly property int craftSlot: 12
   readonly property int craftPitch: 16
-  readonly property int playerW: 32
-  readonly property int playerH: 32
   readonly property int armorCols: 1
 
   // y layout (base): tabs 0..tabH, then classic layout shifted by tabH
   readonly property int tabH: 14
   readonly property int titleY: 6 + tabH
   readonly property int topY: 16 + tabH
-  readonly property int craftX: 98
+  readonly property int craftX: 110
   readonly property int craftResultX: 154
   readonly property int craftY: 18 + tabH
-  readonly property int playerX: 50
-  readonly property int playerY: 18 + tabH
+  // Left column: 4 armor/clothing wells matching the taller character box.
   readonly property int armorX: 8
   readonly property int armorY: 18 + tabH
-  readonly property int mainY: 84 + tabH
+  readonly property int armorSlot: 16
+  readonly property int armorGap: 4
+  readonly property int armorColH: 4 * armorSlot + 3 * armorGap
+  // Bigger character box, same height as the armor column.
+  readonly property int playerX: 30
+  readonly property int playerY: 18 + tabH
+  readonly property int playerW: 44
+  readonly property int playerH: armorColH
+  readonly property int mainY: 100 + tabH
   readonly property int hotbarY: mainY + mainRows * pitch + 4
   readonly property int panelW: 176
   readonly property int panelH: hotbarY + pitch + pad
+
+  // Selection state for smart armor-box suggestions (classic view).
+  property int contextSlot: -1
+  // Sticky suggestion source when a slot is clicked (survives hover leave).
+  property int pinnedSlot: -1
+  onContextSlotChanged: { if (opened && invCanvas) invCanvas.requestPaint() }
+  onPinnedSlotChanged: { if (opened && invCanvas) invCanvas.requestPaint() }
+
+  // Active suggestion source: live hover wins, then sticky pin.
+  readonly property int suggestSrc: contextSlot >= 0 ? contextSlot : pinnedSlot
+
+  // Related apps/services for a selected launcher (max 4 → armor wells).
+  function suggestionsFor(i) {
+    if (i < 0 || i >= slotCount) return []
+    var it = slots[i]
+    if (!it || !it.cmd || !it.cmd.length) return []
+    var n = String(it.name || "").toLowerCase()
+    var out = []
+    function add(idx) {
+      if (idx === i) return
+      var s = slots[idx]
+      if (s && s.cmd && s.cmd.length && out.indexOf(s) < 0) out.push(s)
+    }
+    function byName(name) {
+      for (var k = 0; k < slotCount; k++) {
+        if (slots[k] && slots[k].name === name) return k
+      }
+      return -1
+    }
+    function addName(name) { add(byName(name)) }
+
+    if (/libreoffice|writer|calc|impress|pdf|evince/.test(n)) {
+      addName("LibreOffice Writer"); addName("LibreOffice Calc")
+      addName("LibreOffice Impress"); addName("Evince (PDF)")
+      addName("File manager"); addName("Neovim")
+    } else if (/terminal|btop|docker|neovim|nvim|monitor|system/.test(n)) {
+      addName("Terminal"); addName("btop"); addName("Docker")
+      addName("Neovim"); addName("System monitor"); addName("File manager")
+    } else if (/obsidian|note|chatgpt|ink|pinta|xournal|draw|image|imv|inkscape/.test(n)) {
+      addName("Obsidian"); addName("ChatGPT"); addName("Inkscape")
+      addName("Pinta"); addName("Xournal++"); addName("imv")
+    } else if (/mpv|film|kdenlive|obs|video|play|media|youtube/.test(n)) {
+      addName("mpv"); addName("OBS Studio"); addName("Kdenlive")
+      addName("imv"); addName("YouTube")
+    } else if (/brave|browser|search|web|x\.com|yakihonne|mail|maps|proton/.test(n)) {
+      addName("Brave Search"); addName("Google Maps"); addName("Proton Mail")
+      addName("X"); addName("Yakihonne"); addName("YouTube")
+    } else if (/file|folder|disk|printer|copy|share|local/.test(n)) {
+      addName("File manager"); addName("Disks"); addName("Printer")
+      addName("LocalSend"); addName("Clipboard")
+    } else if (/vpn|proton vpn|shield|security/.test(n)) {
+      addName("Proton VPN"); addName("Proton Mail"); addName("Brave Search")
+      addName("Clipboard")
+    } else {
+      // Generic productivity fallbacks
+      addName("Terminal"); addName("File manager")
+      addName("Clipboard"); addName("Theme menu")
+      addName("Emoji picker"); addName("Rofi launcher")
+    }
+    return out.slice(0, 4)
+  }
+
+  // What armor well `w` (0..3) currently shows: suggestion item or clothing.
+  function armorWellItem(w) {
+    var src = suggestSrc
+    if (src >= 0) {
+      var sug = suggestionsFor(src)
+      if (w < sug.length) return sug[w]
+      return null
+    }
+    return slots[armorBase + w]
+  }
+
+  // Drag & drop (classic view): press → drag → drop swaps main/hotbar items.
+  property int dragFrom: -1
+  property bool dragging: false
+  property real dragX: 0
+  property real dragY: 0
+
+  function beginDrag(i) {
+    if (i < mainBase) return
+    dragFrom = i
+    dragging = false
+  }
+  function moveDrag(bx, by) {
+    if (dragFrom < 0) return
+    if (!dragging) {
+      var o = slotOrigin(dragFrom)
+      var dx = bx - (o.x + slot / 2)
+      var dy = by - (o.y + slot / 2)
+      if (dx * dx + dy * dy > 9) dragging = true
+    }
+    if (dragging) {
+      dragX = bx
+      dragY = by
+      if (invCanvas) invCanvas.requestPaint()
+    }
+  }
+  function endDrag(bx, by) {
+    if (dragFrom < 0) return false
+    var from = dragFrom
+    var wasDrag = dragging
+    dragFrom = -1
+    dragging = false
+    if (invCanvas) invCanvas.requestPaint()
+    if (!wasDrag) return false
+    var to = hitSlot(bx, by)
+    if (to < mainBase || to === from) return true
+    // Swap contents (hotbar ↔ main or main ↔ main).
+    var a = slots
+    var tmp = a[from]
+    a[from] = a[to]
+    a[to] = tmp
+    slots = a
+    saveHotbar()
+    hideTip()
+    if (invCanvas) invCanvas.requestPaint()
+    return true
+  }
+
+  // Persist hotbar row (slots 36-44) so the HUD can follow edits.
+  FileView {
+    id: hotbarFile
+    path: Quickshell.env("HOME") + "/.config/minecraft_theme/hotbar.json"
+    watchChanges: true
+    printErrors: false
+    onLoaded: {
+      try {
+        var o = JSON.parse(text())
+        if (o && o.order && o.order.length === 9) applyHotbarOrder(o.order)
+      } catch (e) {}
+    }
+  }
+  function saveHotbar() {
+    var names = []
+    for (var i = 0; i < 9; i++) {
+      var it = slots[hotbarBase + i]
+      names.push(it && it.name ? it.name : "")
+    }
+    hotbarFile.setText(JSON.stringify({ order: names }) + "\n")
+  }
+  function applyHotbarOrder(names) {
+    // Reorder hotbar slots to match persisted names; unknown → keep in place.
+    var byName = {}
+    var i, it
+    for (i = hotbarBase; i < hotbarBase + 9; i++) {
+      it = slots[i]
+      if (it && it.name) byName[it.name] = it
+    }
+    var used = {}
+    var row = []
+    for (i = 0; i < 9; i++) {
+      var nm = String(names[i] || "")
+      if (byName[nm] && !used[nm]) {
+        row.push(byName[nm])
+        used[nm] = true
+      } else {
+        row.push(null)
+      }
+    }
+    // Fill nulls with any unused hotbar defaults
+    var spare = []
+    for (i = hotbarBase; i < hotbarBase + 9; i++) {
+      it = slots[i]
+      if (it && it.name && !used[it.name]) {
+        spare.push(it)
+        used[it.name] = true
+      }
+    }
+    for (i = 0; i < 9; i++) {
+      if (!row[i] && spare.length) row[i] = spare.shift()
+    }
+    var a = slots
+    for (i = 0; i < 9; i++) a[hotbarBase + i] = row[i]
+    slots = a
+    if (opened && invCanvas) invCanvas.requestPaint()
+  }
+  Component.onCompleted: hotbarFile.reload()
 
   // Omarchy menu root tabs — nerd-font glyphs from omarchy-menu.jsonc icons.
   readonly property var menuTabs: [
@@ -298,6 +514,11 @@ Item {
   function openTab(i) {
     i = Number(i)
     if (!(i >= 0 && i < menuTabs.length)) return
+    // Official About: menu-data has no children — open Omarchy's About window.
+    if (menuTabs[i].route === "about") {
+      root.launchAbout()
+      return
+    }
     if (selectedTab === i) {
       // Second click on active tab: leave submenus, then deselect to classic.
       if (menuPath.length > 0) {
@@ -368,11 +589,12 @@ Item {
     "...#p#...",
     "..#pPp#..",
     ".#pPPPp#.",
+    ".#pPPPp#.",
+    "#pPPPPPp#",
     "#pPPPPPp#",
     "#pPPPPPp#",
     ".#pPPPp#.",
-    "..#pPp#..",
-    "...#p#..."
+    "..#pPp#.."
   ]
   readonly property var mapObsidian: { "#": "#1a1030", "p": "#6d3ccc", "P": "#b48cff" }
 
@@ -441,9 +663,9 @@ Item {
   ]
   readonly property var mapYoutube: { "#": "#7a0000", "r": "#ff0000", "W": "#ffffff" }
 
-  // Items placed by index (armor/craft mostly empty; main+hotbar launchers).
-  // Hotbar row mirrors HUD order for muscle memory.
-  readonly property var slots: {
+  // Items placed by index (armor = Steve's clothing; main+hotbar launchers).
+  // Hotbar row mirrors HUD order for muscle memory (synced via hotbar.json).
+  property var slots: {
     var a = new Array(slotCount)
     // Main storage (27) — launchers with individual pixel icons
     a[9]  = { name: "LibreOffice Writer", cmd: ["uwsm-app", "--", "libreoffice", "--writer"],
@@ -519,8 +741,74 @@ Item {
               rows: root.gridProton, colors: root.mapProton }
     a[44] = { name: "YouTube", cmd: ["omarchy-launch-webapp", "https://youtube.com/"],
               rows: root.gridYoutube, colors: root.mapYoutube }
+    // Armor column = Steve's current clothing (display; suggestions may override).
+    a[0] = { name: "Helmet", cmd: [],
+             rows: root.gridClothHelmet, colors: root.mapClothHelmet }
+    a[1] = { name: "Tunic", cmd: [],
+             rows: root.gridClothChest, colors: root.mapClothChest }
+    a[2] = { name: "Trousers", cmd: [],
+             rows: root.gridClothLegs, colors: root.mapClothLegs }
+    a[3] = { name: "Boots", cmd: [],
+             rows: root.gridClothBoots, colors: root.mapClothBoots }
     return a
   }
+
+  // Clothing pixel icons for the 4 armor wells (Steve palette). All rows 10 wide.
+  readonly property var gridClothHelmet: [
+    "..hhhhhh..",
+    ".hhhhhhhh.",
+    "hhhhhhhhhh",
+    "hhsssssshh",
+    "hsseessehh",
+    "hssssssshh",
+    "hssssssshh",
+    ".ssssssssh",
+    "..........",
+    ".........."
+  ]
+  readonly property var mapClothHelmet: { "h": "#3a2a1a", "s": "#d4b08a", "e": "#3b5dc9", ".": "#00000000" }
+
+  readonly property var gridClothChest: [
+    "..cccccc..",
+    ".cCcccccC.",
+    "cCccccccCc",
+    "cCccccccCc",
+    "cccccccccc",
+    "cccccccccc",
+    "cccccccccc",
+    ".cccccccc.",
+    ".cccccccc.",
+    ".........."
+  ]
+  readonly property var mapClothChest: { "c": "#3dafd0", "C": "#2f9fc4", ".": "#00000000" }
+
+  readonly property var gridClothLegs: [
+    "pppppppppp",
+    "pppppppppp",
+    "pppppppppp",
+    "pppppppppp",
+    "pppppppppp",
+    "ppp....ppp",
+    "ppp....ppp",
+    "ppp....ppp",
+    "ppp....ppp",
+    "ppp....ppp"
+  ]
+  readonly property var mapClothLegs: { "p": "#4a3fa0", ".": "#00000000" }
+
+  readonly property var gridClothBoots: [
+    "..........",
+    "..........",
+    "bb.....bb.",
+    "bb.....bb.",
+    "bbb...bbb.",
+    "bbbb.bbbb.",
+    "bbbbbbbbb.",
+    "bbbbbbbbb.",
+    ".bbbbbbbb.",
+    ".........."
+  ]
+  readonly property var mapClothBoots: { "b": "#5a3a1a", ".": "#00000000" }
 
   // Per-item pixel icons for every filled slot (9×9 unless noted).
   readonly property var gridWriter: [
@@ -864,7 +1152,7 @@ Item {
   function slotOrigin(i) {
     // returns base-unit {x,y} of slot content origin inside panel
     if (i >= armorBase && i < armorBase + 4)
-      return { x: armorX, y: armorY + (i - armorBase) * pitch }
+      return { x: armorX, y: armorY + (i - armorBase) * (armorSlot + armorGap) }
     if (i >= craftBase && i < craftBase + 4) {
       var cx = (i - craftBase) % 2
       var cy = Math.floor((i - craftBase) / 2)
@@ -934,6 +1222,7 @@ Item {
       var sz = (i === resultIdx || (i >= craftBase && i < craftBase + 4)) ? craftSlot : slot
       if (i === resultIdx) sz = craftSlot
       if (i >= craftBase && i < craftBase + 4) sz = craftSlot
+      if (i >= armorBase && i < armorBase + 4) sz = armorSlot
       if (px >= o.x && px < o.x + sz && py >= o.y && py < o.y + sz)
         return i
     }
@@ -990,9 +1279,16 @@ Item {
           anchors.fill: parent
           hoverEnabled: true
           z: -1
+          onPressed: function(mouse) {
+            if (root.selectedTab >= 0) return
+            var bx = mouse.x / panel.s
+            var by = mouse.y / panel.s
+            root.beginDrag(root.hitSlot(bx, by))
+          }
           onPositionChanged: function(mouse) {
             var bx = mouse.x / panel.s
             var by = mouse.y / panel.s
+            root.moveDrag(bx, by)
             var ti = root.hitTab(bx, by)
             root.hoveredTab = ti
             var i = -1
@@ -1010,10 +1306,17 @@ Item {
             } else {
               i = root.hitSlot(bx, by)
               if (i >= 0) {
-                var it = root.slots[i]
+                var it = (i < 4) ? root.armorWellItem(i) : root.slots[i]
                 label = it ? it.name : ""
                 origin = root.slotOrigin(i)
               }
+              // Live suggestion context from hovered main/hotbar launcher.
+              // Armor wells (0-3) and craft keep the current context so
+              // suggestions stay clickable; empty space clears live context only.
+              if (i >= root.mainBase)
+                root.contextSlot = i
+              else if (i < 0)
+                root.contextSlot = -1
             }
             root.hoveredSlot = i
             if (label && origin) {
@@ -1024,17 +1327,21 @@ Item {
           }
           onExited: {
             root.hoveredTab = -1
+            root.contextSlot = -1
             root.hideTip()
           }
-          onClicked: function(mouse) {
+          onReleased: function(mouse) {
             var bx = mouse.x / panel.s
             var by = mouse.y / panel.s
+            if (root.endDrag(bx, by)) return
             var ti = root.hitTab(bx, by)
             if (ti >= 0) {
               root.openTab(ti)
               return
             }
             if (root.selectedTab >= 0) {
+              if (root.hitBack(bx, by) && root.goBackMenu())
+                return
               var mi = root.hitMenuSlot(bx, by)
               if (mi >= 0) {
                 if (root.menuTabs[root.selectedTab].route === "apps") {
@@ -1048,14 +1355,23 @@ Item {
                 }
                 return
               }
-              // Back affordance: click header row under tabs
-              if (by >= root.tabH && by < root.tabH + 14 && root.goBackMenu())
-                return
               return
             }
             var i = root.hitSlot(bx, by)
+            if (i >= 0 && i < 4) {
+              root.launchArmorWell(i)
+              return
+            }
+            if (i >= root.mainBase) {
+              root.pinnedSlot = i
+              root.contextSlot = i
+              root.launch(i)
+              return
+            }
             if (i >= 0)
               root.launch(i)
+            else
+              root.pinnedSlot = -1
           }
         }
 
@@ -1146,7 +1462,7 @@ Item {
               return
             }
 
-            // Player preview well (original stub pixel figure — M5 Steve replaces)
+            // Player preview well — taller box aligned with the armor column
             var plx = root.playerX * s
             var ply = root.playerY * s
             var plw = root.playerW * s
@@ -1159,12 +1475,22 @@ Item {
             ctx.fillStyle = "#ffffff"
             ctx.fillRect(plx, ply + plh - s, plw, s)
             ctx.fillRect(plx + plw - s, ply, s, plh)
-            // simple original character silhouette
-            drawPlayer(ctx, plx + 6 * s, ply + 4 * s, s)
+            // Scale figure to the bigger well (unit 2× gui scale, centered)
+            var figU = 2 * s
+            drawPlayer(ctx,
+              plx + Math.floor((plw - 16 * figU) / 2),
+              ply + Math.floor((plh - 26 * figU) / 2),
+              figU)
 
-            // Armor column wells
+            // Armor column wells (aligned to character box height)
             for (var a = 0; a < 4; a++) {
-              drawSlotFrame(ctx, root.armorX * s, (root.armorY + a * root.pitch) * s, root.slot * s, s, false)
+              var ao = root.slotOrigin(root.armorBase + a)
+              var hotArmor = root.hoveredSlot === (root.armorBase + a)
+              drawSlotFrame(ctx, ao.x * s, ao.y * s, root.armorSlot * s, s, false)
+              if (hotArmor) {
+                ctx.fillStyle = "rgba(255, 255, 255, 0.35)"
+                ctx.fillRect(ao.x * s, ao.y * s, root.armorSlot * s, root.armorSlot * s)
+              }
             }
 
             // Crafting 2×2 + result
@@ -1175,7 +1501,7 @@ Item {
             var ro = root.slotOrigin(root.resultIdx)
             drawSlotFrame(ctx, ro.x * s, ro.y * s, root.craftSlot * s, s, false)
             // arrow between craft and result
-            drawArrow(ctx, (root.craftX + 34) * s, (root.craftY + 8) * s, s)
+            drawArrow(ctx, (root.craftX + 36) * s, (root.craftY + 8) * s, s)
 
             // Main 3×9
             for (var m = 0; m < 27; m++) {
@@ -1192,13 +1518,16 @@ Item {
               drawSlotFrame(ctx, ho.x * s, ho.y * s, root.slot * s, s, false)
             }
 
-            // Icons + hover highlight
+            // Icons + hover highlight (armor wells show clothing or suggestions)
             for (var i = 0; i < root.slotCount; i++) {
-              var it = root.slots[i]
+              var isArmor = i >= root.armorBase && i < root.armorBase + 4
+              var it = isArmor ? root.armorWellItem(i) : root.slots[i]
               var o = root.slotOrigin(i)
               if (o.x < 0) continue
               var sz = (i >= root.craftBase && i <= root.resultIdx) ? root.craftSlot : root.slot
               if (i === root.resultIdx) sz = root.craftSlot
+              if (isArmor) sz = root.armorSlot
+              if (root.dragFrom === i) continue
 
               if (i === root.hoveredSlot) {
                 ctx.fillStyle = "rgba(255, 255, 255, 0.35)"
@@ -1222,6 +1551,21 @@ Item {
                 ctx.textBaseline = "top"
               }
             }
+
+            // Drag ghost follows the cursor
+            if (root.dragging && root.dragFrom >= 0) {
+              var dit = root.slots[root.dragFrom]
+              if (dit && dit.rows) {
+                ctx.globalAlpha = 0.85
+                var diw = dit.rows[0].length
+                var dih = dit.rows.length
+                root.paintGrid(ctx,
+                  Math.round((root.dragX - diw / 2) * s),
+                  Math.round((root.dragY - dih / 2) * s),
+                  s, dit.rows, dit.colors)
+                ctx.globalAlpha = 1.0
+              }
+            }
           }
 
           function drawMenuView(ctx, s) {
@@ -1229,15 +1573,20 @@ Item {
             var items = isApps ? root.appRows : root.menuItems()
             var count = items.length
 
-            // Back chip when drilled into a submenu
+            // Back chip on the right of the title row when drilled into a submenu
             if (root.menuPath.length > 0) {
               ctx.fillStyle = "#6a6a6a"
-              ctx.fillRect(root.pad * s, (root.tabH + 4) * s, 28 * s, 10 * s)
+              ctx.fillRect(root.backChipX * s, root.backChipY * s,
+                           root.backChipW * s, root.backChipH * s)
               ctx.fillStyle = "#ffffff"
               ctx.font = "bold " + String(6 * s) + "px Monocraft, monospace"
-              ctx.textAlign = "left"
+              ctx.textAlign = "center"
               ctx.textBaseline = "middle"
-              ctx.fillText("\u2190 Back", (root.pad + 3) * s, (root.tabH + 9) * s)
+              ctx.fillText("← Back",
+                           (root.backChipX + root.backChipW / 2) * s,
+                           (root.backChipY + root.backChipH / 2) * s)
+              ctx.textAlign = "left"
+              ctx.textBaseline = "top"
             }
 
             var y0 = root.menuGridY

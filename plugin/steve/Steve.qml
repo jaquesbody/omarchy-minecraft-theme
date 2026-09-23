@@ -1,4 +1,5 @@
 import QtQuick
+import QtMultimedia
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
@@ -19,11 +20,10 @@ Item {
 
   property int guiScale: 3
   property int anchorX: 8
-  property int anchorY: 8
+  property int anchorY: 14
   property int cursorX: 0
   property int cursorY: 0
   property bool blinking: false
-  property int bobPhase: 0
 
   Timer {
     id: cursorTimer
@@ -68,11 +68,15 @@ Item {
     interval: 140
     onTriggered: root.blinking = false
   }
-  Timer {
-    interval: 1200
-    repeat: true
-    running: root.opened
-    onTriggered: root.bobPhase = (root.bobPhase + 1) % 2
+  // Optional clip: drop steve.mp4 into the plugin dir to animate.
+  property bool hasVideo: false
+  FileView {
+    id: videoProbe
+    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.jaquesbody.minecraft-steve/steve.mp4"
+    preload: true
+    printErrors: false
+    onLoaded: root.hasVideo = text().length > 0
+    onLoadFailed: root.hasVideo = false
   }
 
   PanelWindow {
@@ -89,7 +93,7 @@ Item {
     readonly property int s: root.guiScale
     readonly property int steveW: Math.floor(48 * s / 2)
     readonly property int steveH: Math.floor(59 * s / 2)
-    readonly property int textH: 22 * s
+    readonly property int textH: 14 * s
 
     Item {
       id: screen
@@ -97,10 +101,10 @@ Item {
 
       Item {
         id: steveArea
-        width: Math.max(panel.steveW, 140 * panel.s / 2)
+        width: Math.max(panel.steveW, 160 * panel.s / 2)
         height: panel.steveH + panel.textH + 6 * panel.s
         x: root.anchorX * panel.s
-        y: root.anchorY * panel.s + root.bobPhase * panel.s
+        y: root.anchorY * panel.s
 
         MouseArea {
           anchors.fill: parent
@@ -111,62 +115,66 @@ Item {
           ])
         }
 
-        Image {
-          id: steveImg
+        // Flip so Steve points right (scale.x = -1 mirrors the sprite).
+        Item {
+          id: steveFlip
           anchors.horizontalCenter: parent.horizontalCenter
           anchors.top: parent.top
           width: panel.steveW
           height: panel.steveH
-          source: Qt.resolvedUrl("steve.png")
-          fillMode: Image.PreserveAspectFit
-          sourceSize: Qt.size(48, 59)
-          smooth: false
-          mipmap: false
-          asynchronous: false
-          visible: status === Image.Ready
-        }
+          transform: Scale { xScale: -1; origin.x: steveFlip.width / 2; origin.y: steveFlip.height / 2 }
 
-        Canvas {
-          id: steveFallback
-          anchors.fill: steveImg
-          visible: steveImg.status !== Image.Ready
-          onWidthChanged: requestPaint()
-          onHeightChanged: requestPaint()
-          Component.onCompleted: requestPaint()
-          onPaint: {
-            var ctx = getContext("2d")
-            ctx.clearRect(0, 0, width, height)
-            if (width <= 0 || height <= 0) return
-            var s = Math.max(1, Math.floor(width / 14))
-            var rows = root.blinking ? root.gridBlink : root.gridOpen
-            root.paintGrid(ctx, 0, 0, s, rows, root.steveMap)
+          Video {
+            id: steveVideo
+            anchors.fill: parent
+            source: Qt.resolvedUrl("steve.mp4")
+            visible: root.hasVideo && source != ""
+            loops: MediaPlayer.Infinite
+            autoPlay: root.opened && root.hasVideo
+            fillMode: VideoOutput.PreserveAspectFit
+            muted: true
+          }
+
+          Image {
+            id: steveImg
+            anchors.fill: parent
+            source: Qt.resolvedUrl("steve.png")
+            fillMode: Image.PreserveAspectFit
+            sourceSize: Qt.size(48, 59)
+            smooth: false
+            mipmap: false
+            asynchronous: false
+            visible: !root.hasVideo && status === Image.Ready
+          }
+
+          Canvas {
+            id: steveFallback
+            anchors.fill: parent
+            visible: !root.hasVideo && steveImg.status !== Image.Ready
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+            Component.onCompleted: requestPaint()
+            onPaint: {
+              var ctx = getContext("2d")
+              ctx.clearRect(0, 0, width, height)
+              if (width <= 0 || height <= 0) return
+              var s = Math.max(1, Math.floor(width / 14))
+              var rows = root.blinking ? root.gridBlink : root.gridOpen
+              root.paintGrid(ctx, 0, 0, s, rows, root.steveMap)
+            }
           }
         }
 
-        Column {
-          id: posCol
-          anchors.top: steveImg.bottom
-          anchors.topMargin: 4 * panel.s
+        Text {
+          id: posLabel
+          anchors.top: steveFlip.bottom
+          anchors.topMargin: 3 * panel.s
           anchors.horizontalCenter: parent.horizontalCenter
-          spacing: 1 * panel.s
-
-          Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: "Position X, Y"
-            color: "#ffffff"
-            style: Text.Outline
-            styleColor: "#000000"
-            font { family: "Monocraft"; pixelSize: 7 * panel.s }
-          }
-
-          Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: root.cursorX + ", " + root.cursorY
-            color: "#ffffff"
-            style: Text.Outline
-            styleColor: "#000000"
-            font { family: "Monocraft"; pixelSize: 7 * panel.s }
-          }
+          text: "Position " + root.cursorX + ", " + root.cursorY
+          color: "#ffffff"
+          style: Text.Outline
+          styleColor: "#000000"
+          font { family: "Monocraft"; pixelSize: 5 * panel.s }
         }
       }
     }
