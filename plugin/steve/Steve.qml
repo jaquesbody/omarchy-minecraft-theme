@@ -183,7 +183,20 @@ Item {
   PanelWindow {
     id: panel
     visible: root.opened && !root.screensaverActive
-    anchors { top: true; bottom: true; left: true; right: true }
+    // The window itself is only big enough for Steve + his label: anchored
+    // top-left with margins (so the surface starts below the bar), never
+    // fullscreen. Even if the click mask were ignored entirely, clicks can
+    // only ever die inside this small box — the desktop, bar and windows
+    // everywhere else stay clickable.
+    anchors { top: true; left: true }
+    implicitWidth: steveArea.width
+    implicitHeight: steveArea.y + steveArea.height
+    margins.top: root.anchorY * s - 2 * s
+    // Keeps Steve's horizontal centre exactly where the fullscreen layout
+    // put it (anchorX*s + max(steveW, 160*s/2)/2 = 84px) no matter how wide
+    // the label makes the window.
+    margins.left: Math.round(
+      root.anchorX * s + Math.max(steveW, 160 * s / 2) / 2 - implicitWidth / 2)
     color: "transparent"
     WlrLayershell.namespace: "minecraft-steve"
     WlrLayershell.layer: WlrLayer.Overlay
@@ -194,7 +207,6 @@ Item {
     readonly property int s: root.guiScale
     readonly property int steveW: Math.floor(48 * s / 2)
     readonly property int steveH: Math.floor(59 * s / 2)
-    readonly property int textH: 14 * s
 
     Item {
       id: screen
@@ -202,10 +214,12 @@ Item {
 
       Item {
         id: steveArea
-        width: Math.max(panel.steveW, 160 * panel.s / 2)
-        height: panel.steveH + panel.textH + 6 * panel.s
-        x: root.anchorX * panel.s
-        y: root.anchorY * panel.s
+        // Hug the content: wide enough for sprite+halo or the label
+        // (whichever is wider), tall enough for sprite + gap + label + halo.
+        width: Math.max(panel.steveW + 4 * panel.s, posLabel.implicitWidth + 2 * panel.s)
+        height: panel.steveH + 3 * panel.s + posLabel.implicitHeight + 2 * panel.s
+        x: 0
+        y: 2 * panel.s
 
         MouseArea {
           anchors.fill: parent
@@ -374,7 +388,9 @@ Item {
 
       // Click region: hugs just the sprite (+ a small halo for the Herobrine
       // glow) so the wide "Position" label and the desktop around Steve keep
-      // passing clicks through. Declared as a sibling of steveArea under the
+      // passing clicks through. Belt on top of the window's own small bounds:
+      // the mask narrows it further to the sprite, the window caps it if the
+      // mask were ever ignored. Declared as a sibling of steveArea under the
       // window-filling `screen` item, so its x/y map exactly like steveArea's.
       Item {
         id: maskBox

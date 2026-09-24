@@ -14,8 +14,12 @@ Item {
   property string moduleName
   property var settings
 
-  implicitWidth: 28
-  implicitHeight: bar ? bar.barSize : 26
+  // Small by default so the widget never inflates the bar in other themes;
+  // grows to the full bar size while the Minecraft theme is on (that theme's
+  // bar is taller anyway, so the cube reads as a proper pixel block there).
+  readonly property int box: active ? (bar ? bar.barSize : 26) : 18
+  implicitWidth: root.box
+  implicitHeight: root.box
 
   property bool active: false
 
@@ -34,18 +38,17 @@ Item {
 
   onActiveChanged: cube.requestPaint()
 
-  // 9x9 pixel grass block; cell size is width/9 = 2px, so every pixel stays
-  // sharp at the whole-number UI scale.
+  // 8x8 pixel grass block; cell size is width/8 = 2px small / 3px large, so
+  // every pixel stays sharp at the whole-number UI scale.
   readonly property var grid: [
-    "112113112",
-    "121131121",
-    "111211113",
-    "441444144",
-    "556557555",
-    "565585565",
-    "755655855",
-    "558556557",
-    "565575585"
+    "11211311",
+    "12113112",
+    "11121111",
+    "44144414",
+    "55655755",
+    "56558556",
+    "75565585",
+    "55855655"
   ]
   readonly property var palOn: ({
     "1": "#6bbd45", "2": "#7fd157", "3": "#57a736", "4": "#4e9430",
@@ -59,13 +62,14 @@ Item {
   Canvas {
     id: cube
     anchors.centerIn: parent
-    width: 18
-    height: 18
+    // 16px greyscale cube by default, 24px full-colour in Minecraft theme.
+    width: root.active ? 24 : 16
+    height: root.active ? 24 : 16
     smooth: false
     onPaint: {
       var ctx = getContext("2d")
       ctx.clearRect(0, 0, width, height)
-      var n = 9
+      var n = root.grid.length
       var cell = width / n
       var pal = root.active ? root.palOn : root.palOff
       var g = root.grid
