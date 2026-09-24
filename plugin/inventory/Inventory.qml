@@ -55,7 +55,6 @@ Item {
       }
     }
   }
-  Component.onCompleted: ssProbe.running = true
   property var shell: null
   property var manifest: null
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
@@ -1173,10 +1172,10 @@ Item {
     if (opened && invCanvas) invCanvas.requestPaint()
   }
   Component.onCompleted: {
+    ssProbe.running = true
     hotbarFile.reload()
     appRefreshTimer.start()
   }
-
   // Omarchy menu root tabs — nerd-font glyphs from omarchy-menu.jsonc icons.
   readonly property var menuTabs: [
     { route: "apps", icon: "\u{f003b}", label: "Apps" },

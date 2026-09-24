@@ -58,7 +58,6 @@ Item {
       }
     }
   }
-  Component.onCompleted: ssProbe.running = true
   // One-shot intro tip (payload {tip}) shown above the hotbar for a few seconds.
   property string introTip: ""
   function open(payload) {
@@ -654,8 +653,10 @@ Item {
       }
     } catch (e) {}
   }
-  Component.onCompleted: hotbarOrderFile.reload()
-
+  Component.onCompleted: {
+    ssProbe.running = true
+    hotbarOrderFile.reload()
+  }
   function launchSlot(i) {
     var sl = slots[i]
     if (!sl || !sl.cmd || !sl.cmd.length)
