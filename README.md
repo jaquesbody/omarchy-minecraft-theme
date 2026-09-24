@@ -17,6 +17,20 @@ all original art, code, and audio. **Not affiliated with Mojang or Microsoft.**
 | **Sounds** | Original procedural click/open/close/toast/death WAVs (CC0) |
 | **Screensaver** | Alternating MINEARCHY / OMARCRAFT block art while the theme is on; original branding restored on off. All minecraft panels hide while it runs. |
 
+## Screenshots
+
+| HUD | Inventory |
+|-----|-----------|
+| ![HUD with hotbar, hearts and XP bar](media/screenshot-hud.png) | ![Inventory with armor, craft wells and app grid](media/screenshot-inventory.png) |
+
+| Apps tab | Steve tooltip |
+|----------|---------------|
+| ![Inventory Apps tab with pixel icons](media/screenshot-inventory-apps.png) | ![Inventory with Steve sneak tooltip](media/screenshot-steve-tooltip.png) |
+
+![Inventory detail with armor progress and fun fact](media/screenshot-inventory-detail.png)
+
+**Demo (66 s):** [media/omarchy-minecraft-theme.mp4](media/omarchy-minecraft-theme.mp4)
+
 ## Requirements
 
 - [Omarchy](https://omarchy.org) (tested on 4.0.x / Hyprland 0.56 / Quickshell 0.3)
@@ -26,8 +40,8 @@ all original art, code, and audio. **Not affiliated with Mojang or Microsoft.**
 ## Install
 
 ```bash
-git clone <your-repo-url> minecraft-theme
-cd minecraft-theme
+git clone https://github.com/jaquesbody/omarchy-minecraft-theme.git
+cd omarchy-minecraft-theme
 ./scripts/install.sh
 omarchy theme set minecraft
 # or press SUPER+M to toggle
@@ -77,6 +91,7 @@ plugin/         Quickshell panels (Hud, inventory, steve, death, toast, splash)
 scripts/        install, uninstall, toggles, sound/toast/splash helpers
 assets/sounds/  original procedural WAVs (CC0)
 cursor/         MinecraftPixel hyprcursor generator + pack
+media/          screenshots + demo video (README)
 ```
 
 ## Credits & license
