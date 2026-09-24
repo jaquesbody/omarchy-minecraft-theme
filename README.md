@@ -1,7 +1,3 @@
-
-https://github.com/user-attachments/assets/d87af3de-12f6-44c8-b4cd-ad515e60451c
-
-
 # Minecraft Theme for Omarchy
 
 A switchable Omarchy theme plus a suite of Minecraft-style Quickshell overlays —
