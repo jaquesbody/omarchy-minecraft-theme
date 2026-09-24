@@ -281,9 +281,10 @@ Item {
               }
               ctx.fillStyle = "#ffffff"
               // Lightest eye pixels on OG Steve (steve.png 48×59):
-              // left iris (26-27,8-9) + sclera (28-29,8-9); right sclera (31-32,8-10).
-              R(26, 8, 4, 2)   // left eye (iris + white)
-              R(31, 8, 2, 3)   // right eye (lightest whites)
+              // left iris+sclera shifted 2px left (screen-left was misaligned);
+              // right sclera (31-32,8-10) was correct.
+              R(24, 8, 4, 2)   // left eye
+              R(31, 8, 2, 3)   // right eye
               // Slim evil smile under the nose.
               R(22, 14, 8, 1)
               R(21, 13, 2, 1)
