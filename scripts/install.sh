@@ -86,7 +86,7 @@ enable_plugin() {
     omarchy plugin enable "$id" 2>/dev/null || true
   fi
 }
-enable_plugin "io.github.jaquesbody.minecraft-hud" "$REPO_DIR/plugin"
+enable_plugin "io.github.jaquesbody.minecraft-hud" "$REPO_DIR/plugin/hud"
 enable_plugin "io.github.jaquesbody.minecraft-inventory" "$REPO_DIR/plugin/inventory"
 enable_plugin "io.github.jaquesbody.minecraft-steve" "$REPO_DIR/plugin/steve"
 enable_plugin "io.github.jaquesbody.minecraft-death" "$REPO_DIR/plugin/death"
