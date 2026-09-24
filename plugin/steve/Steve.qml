@@ -70,12 +70,10 @@ Item {
 
   function open(payload) {
     opened = true
-    cursorTimer.start()
     pollCursor()
   }
   function close() {
     opened = false
-    cursorTimer.stop()
     herobrine = false
     herobrineTimer.stop()
   }
@@ -116,7 +114,7 @@ Item {
     id: cursorTimer
     interval: 250
     repeat: true
-    running: root.opened
+    running: root.opened && !root.screensaverActive
     onTriggered: root.pollCursor()
   }
 
@@ -160,7 +158,7 @@ Item {
     id: blinkTimer
     interval: 3200
     repeat: true
-    running: root.opened && !root.herobrine
+    running: root.opened && !root.herobrine && !root.screensaverActive
     onTriggered: {
       root.blinking = true
       blinkOff.start()

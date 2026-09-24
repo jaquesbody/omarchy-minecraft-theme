@@ -226,7 +226,7 @@ Item {
   Timer {
     interval: 2000
     repeat: true
-    running: root.opened
+    running: root.opened && !root.screensaverActive
     triggeredOnStart: true
     onTriggered: meminfoFile.reload()
   }

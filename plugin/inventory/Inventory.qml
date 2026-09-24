@@ -942,7 +942,7 @@ Item {
     id: ambientTimer
     interval: 400
     repeat: true
-    running: root.opened
+    running: root.opened && !root.screensaverActive
     onTriggered: { if (root.invCanvas) root.invCanvas.requestPaint() }
   }
 
@@ -951,7 +951,7 @@ Item {
     id: iconSettleTimer
     interval: 250
     repeat: true
-    running: root.opened && root.selectedTab >= 0 &&
+    running: root.opened && !root.screensaverActive && root.selectedTab >= 0 &&
       root.menuTabs[root.selectedTab].route === "apps"
     onTriggered: { if (root.invCanvas) root.invCanvas.requestPaint() }
   }

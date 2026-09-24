@@ -15,7 +15,7 @@ all original art, code, and audio. **Not affiliated with Mojang or Microsoft.**
 | **Toast** | Advancement-style notifications (auto or `minecraft-toast`) |
 | **Splash (SUPER+SHIFT+X)** | Yellow diagonal splash text; also fires when the theme turns on |
 | **Sounds** | Original procedural click/open/close/toast/death WAVs (CC0) |
-| **Screensaver** | Minecraft-style OMARCHY ASCII art applied while the theme is on; restored on off |
+| **Screensaver** | Alternating MINEARCHY / OMARCRAFT block art while the theme is on; original branding restored on off. All minecraft panels hide while it runs. |
 
 ## Requirements
 
