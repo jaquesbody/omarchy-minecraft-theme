@@ -29,7 +29,11 @@ all original art, code, and audio. **Not affiliated with Mojang or Microsoft.**
 
 ![Inventory detail with armor progress and fun fact](media/screenshot-inventory-detail.png)
 
-**Demo (66 s):** [media/omarchy-minecraft-theme.mp4](media/omarchy-minecraft-theme.mp4)
+### Demo (66 s)
+
+https://github.com/user-attachments/assets/d87af3de-12f6-44c8-b4cd-ad515e60451c
+
+[Download the mp4](media/omarchy-minecraft-theme.mp4)
 
 ## Requirements
 
