@@ -3,10 +3,59 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
 
+import Quickshell.Hyprland
 Item {
   id: root
 
   property bool opened: false
+
+  // Hide this panel while Omarchy screensaver (org.omarchy.screensaver) is up.
+  property bool screensaverActive: false
+  property var ssAddrs: ({})
+  function ssSet(address, on) {
+    var next = {}
+    var n = 0
+    var addr = String(address || "")
+    for (var k in root.ssAddrs) {
+      if (k !== addr && root.ssAddrs[k]) { next[k] = true; n++ }
+    }
+    if (on && addr) { next[addr] = true; n++ }
+    root.ssAddrs = next
+    root.screensaverActive = n > 0
+  }
+  Connections {
+    target: Hyprland
+    function onRawEvent(event) {
+      var name = String(event && event.name ? event.name : "")
+      if (name === "openwindow") {
+        var open = String(event && event.data ? event.data : "").split(",")
+        try { if (event.parse) open = event.parse(4) } catch (e) {}
+        if (String(open[2] || "") === "org.omarchy.screensaver")
+          root.ssSet(String(open[0] || ""), true)
+      } else if (name === "closewindow") {
+        var close = String(event && event.data ? event.data : "").split(",")
+        try { if (event.parse) close = event.parse(1) } catch (e) {}
+        root.ssSet(String(close[0] || ""), false)
+      }
+    }
+  }
+  Process {
+    id: ssProbe
+    running: false
+    command: ["hyprctl", "clients", "-j"]
+    stdout: StdioCollector {
+      onTextChanged: {
+        try {
+          var cs = JSON.parse(text)
+          for (var i = 0; i < cs.length; i++) {
+            if (String(cs[i].class || "") === "org.omarchy.screensaver")
+              root.ssSet(String(cs[i].address || "probe"), true)
+          }
+        } catch (e) {}
+      }
+    }
+  }
+  Component.onCompleted: ssProbe.running = true
   property int clickCount: 0
   // Herobrine: real Steve texture stays up; white eyes/smile/glow overlay on top.
   property bool herobrine: false
@@ -135,7 +184,7 @@ Item {
 
   PanelWindow {
     id: panel
-    visible: root.opened
+    visible: root.opened && !root.screensaverActive
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
     WlrLayershell.namespace: "minecraft-steve"
@@ -281,9 +330,9 @@ Item {
               }
               ctx.fillStyle = "#ffffff"
               // Lightest eye pixels on OG Steve (steve.png 48×59):
-              // left iris+sclera shifted 2px left (screen-left was misaligned);
+              // left iris+sclera shifted 4px left (screen-left was misaligned);
               // right sclera (31-32,8-10) was correct.
-              R(22, 8, 4, 2)   // left eye
+              R(20, 8, 4, 2)   // left eye
               R(31, 8, 2, 3)   // right eye
               // Slim evil smile under the nose.
               R(22, 14, 8, 1)

@@ -2,10 +2,59 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 
+import Quickshell.Hyprland
 Item {
   id: root
 
   property bool opened: false
+
+  // Hide this panel while Omarchy screensaver (org.omarchy.screensaver) is up.
+  property bool screensaverActive: false
+  property var ssAddrs: ({})
+  function ssSet(address, on) {
+    var next = {}
+    var n = 0
+    var addr = String(address || "")
+    for (var k in root.ssAddrs) {
+      if (k !== addr && root.ssAddrs[k]) { next[k] = true; n++ }
+    }
+    if (on && addr) { next[addr] = true; n++ }
+    root.ssAddrs = next
+    root.screensaverActive = n > 0
+  }
+  Connections {
+    target: Hyprland
+    function onRawEvent(event) {
+      var name = String(event && event.name ? event.name : "")
+      if (name === "openwindow") {
+        var open = String(event && event.data ? event.data : "").split(",")
+        try { if (event.parse) open = event.parse(4) } catch (e) {}
+        if (String(open[2] || "") === "org.omarchy.screensaver")
+          root.ssSet(String(open[0] || ""), true)
+      } else if (name === "closewindow") {
+        var close = String(event && event.data ? event.data : "").split(",")
+        try { if (event.parse) close = event.parse(1) } catch (e) {}
+        root.ssSet(String(close[0] || ""), false)
+      }
+    }
+  }
+  Process {
+    id: ssProbe
+    running: false
+    command: ["hyprctl", "clients", "-j"]
+    stdout: StdioCollector {
+      onTextChanged: {
+        try {
+          var cs = JSON.parse(text)
+          for (var i = 0; i < cs.length; i++) {
+            if (String(cs[i].class || "") === "org.omarchy.screensaver")
+              root.ssSet(String(cs[i].address || "probe"), true)
+          }
+        } catch (e) {}
+      }
+    }
+  }
+  Component.onCompleted: ssProbe.running = true
   property string splashText: ""
   property int autoHideMs: 3500
 
@@ -76,7 +125,7 @@ Item {
 
   PanelWindow {
     id: panel
-    visible: root.opened
+    visible: root.opened && !root.screensaverActive
     // Full-width strip under the bar; visual centers itself inside.
     // PanelWindow only supports edge anchors (no x / horizontalCenter).
     anchors { top: true; left: true; right: true }
