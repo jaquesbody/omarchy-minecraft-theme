@@ -214,23 +214,23 @@ Item {
             visible: steveAnim.status !== AnimatedImage.Ready && status === Image.Ready
           }
 
-          // Very faint, tight white glow behind Herobrine.
+          // Faint white glow behind the figure (Herobrine only).
           Rectangle {
             id: herobrineGlow
             visible: root.herobrine
             anchors.fill: parent
-            anchors.margins: -3 * panel.s
-            color: "#14ffffff"
-            radius: 4 * panel.s
+            anchors.margins: -6 * panel.s
+            color: "#30ffffff"
+            radius: 5 * panel.s
             z: -1
           }
           Rectangle {
             id: herobrineGlow2
             visible: root.herobrine
             anchors.fill: parent
-            anchors.margins: -1 * panel.s
-            color: "#22ffffff"
-            radius: 2 * panel.s
+            anchors.margins: -2 * panel.s
+            color: "#50ffffff"
+            radius: 3 * panel.s
             z: -1
           }
 
@@ -280,13 +280,14 @@ Item {
                 ctx.fillRect(ox + x * sx, oy + y * sy, w * sx, h * sy)
               }
               ctx.fillStyle = "#ffffff"
-              // Small white eyes over the original iris pixels (≈ x22-27, y8-10).
-              R(22, 8, 3, 3)   // left eye
-              R(26, 7, 3, 3)   // right eye
-              // Evil white smile — slim grin + small upturned corners.
-              R(21, 14, 9, 1)  // mouth bar
-              R(20, 13, 2, 1)  // left corner
-              R(29, 13, 2, 1)  // right corner
+              // Lightest eye pixels on OG Steve (steve.png 48×59):
+              // left iris (26-27,8-9) + sclera (28-29,8-9); right sclera (31-32,8-10).
+              R(26, 8, 4, 2)   // left eye (iris + white)
+              R(31, 8, 2, 3)   // right eye (lightest whites)
+              // Slim evil smile under the nose.
+              R(22, 14, 8, 1)
+              R(21, 13, 2, 1)
+              R(29, 13, 2, 1)
             }
           }
 
