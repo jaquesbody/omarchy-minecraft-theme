@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.jaquesbody.minecraft-cube",
+  "name": "Minecraft Cube",
+  "version": "1.0.0",
+  "author": "jaquesbody",
+  "license": "MIT",
+  "description": "Grass-block bar button beside the Omarchy menu that toggles the Minecraft theme on and off (same as SUPER+M).",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "Cube.qml"
+  },
+  "barWidget": {
+    "displayName": "Minecraft Cube",
+    "description": "Grass-block button that toggles the Minecraft theme.",
+    "defaultSection": "left"
+  }
+}

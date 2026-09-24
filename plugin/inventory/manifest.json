@@ -7,8 +7,7 @@
   "license": "MIT",
   "description": "Minecraft-style inventory panel with Omarchy menu tabs. Toggle with SUPER+E.",
   "kinds": [
-    "panel",
-    "menu"
+    "panel"
   ],
   "keepLoaded": true,
   "entryPoints": {

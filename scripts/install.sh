@@ -92,9 +92,15 @@ enable_plugin "io.github.jaquesbody.minecraft-steve" "$REPO_DIR/plugin/steve"
 enable_plugin "io.github.jaquesbody.minecraft-death" "$REPO_DIR/plugin/death"
 enable_plugin "io.github.jaquesbody.minecraft-toast" "$REPO_DIR/plugin/toast"
 enable_plugin "io.github.jaquesbody.minecraft-splash" "$REPO_DIR/plugin/splash"
+enable_plugin "io.github.jaquesbody.minecraft-cube" "$REPO_DIR/plugin/cube"
 
 # Reload plugin list so newly copied plugins are visible to IPC
 omarchy-shell shell rescanPlugins 2>/dev/null || true
+
+# Place the theme-toggle cube right beside the Omarchy menu button (bar left).
+omarchy plugin enable "io.github.jaquesbody.minecraft-cube" --section left --after omarchy.menu 2>/dev/null \
+  || omarchy plugin enable "io.github.jaquesbody.minecraft-cube" 2>/dev/null \
+  || true
 
 # 5. Hyprland keybindings (survive Omarchy updates: live in user bindings)
 BINDINGS="$HOME/.config/hypr/bindings.lua"

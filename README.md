@@ -8,9 +8,10 @@ all original art, code, and audio. **Not affiliated with Mojang or Microsoft.**
 | Piece | What it is |
 |-------|------------|
 | **Theme `minecraft`** | Obsidian palette, XP-green accents, stone GUI greys, Monocraft font, pixel cursor, transparent bar |
+| **Bar cube** | Grass-block button beside the Omarchy menu — click to toggle the theme on/off (same as SUPER+M) |
 | **HUD (SUPER+H)** | Hotbar, hearts, hunger, XP bar, status icons, bottom-right `[E] inventory` chip |
 | **Inventory (SUPER+E)** | Classic GUI with app launchers, category-matched craft-row suggestions |
-| **Steve (SUPER+SHIFT+S)** | Blocky companion, bottom-left; blink + bob; click opens inventory (crouches) |
+| **Steve (SUPER+SHIFT+S)** | Blocky companion, top-left; blink + bob; click opens inventory (crouches) |
 | **Death power menu (SUPER+SHIFT+D)** | “You Died!” full-screen with Respawn / Title Screen / Log Out / Restart / Shut Down |
 | **Toast** | Advancement-style notifications (auto or `minecraft-toast`) |
 | **Splash (SUPER+SHIFT+X)** | Yellow diagonal splash text; also fires when the theme turns on |

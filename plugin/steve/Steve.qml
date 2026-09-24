@@ -189,7 +189,7 @@ Item {
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore
-    mask: Region { item: steveArea }
+    mask: Region { item: maskBox }
 
     readonly property int s: root.guiScale
     readonly property int steveW: Math.floor(48 * s / 2)
@@ -370,6 +370,18 @@ Item {
           styleColor: "#000000"
           font { family: "Monocraft"; pixelSize: 4 * panel.s }
         }
+      }
+
+      // Click region: hugs just the sprite (+ a small halo for the Herobrine
+      // glow) so the wide "Position" label and the desktop around Steve keep
+      // passing clicks through. Declared as a sibling of steveArea under the
+      // window-filling `screen` item, so its x/y map exactly like steveArea's.
+      Item {
+        id: maskBox
+        x: steveArea.x + steveFlip.x - 2 * panel.s
+        y: steveArea.y + steveFlip.y - 2 * panel.s
+        width: panel.steveW + 4 * panel.s
+        height: panel.steveH + 4 * panel.s
       }
     }
   }
