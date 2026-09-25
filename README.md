@@ -30,7 +30,7 @@ all original art, code, and audio. **Not affiliated with Mojang or Microsoft.**
 
 ![Inventory Apps tab with pixel icons](media/screenshot-inventory-apps.png)
 
-### Demo (66 s)
+### Demo (145 s)
 
 https://github.com/user-attachments/assets/d87af3de-12f6-44c8-b4cd-ad515e60451c
 
