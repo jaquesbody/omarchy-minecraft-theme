@@ -22,13 +22,13 @@ all original art, code, and audio. **Not affiliated with Mojang or Microsoft.**
 
 | HUD | Inventory |
 |-----|-----------|
-| ![HUD with hotbar, hearts and XP bar](media/screenshot-hud.png) | ![Inventory with armor, craft wells and app grid](media/screenshot-inventory.png) |
+| ![HUD over a sunset village with hotbar, hearts, XP bar and Steve](media/screenshot-hud.png) | ![Inventory open over the game world](media/screenshot-inventory.png) |
 
-| Apps tab | Steve tooltip |
-|----------|---------------|
-| ![Inventory Apps tab with pixel icons](media/screenshot-inventory-apps.png) | ![Inventory with Steve sneak tooltip](media/screenshot-steve-tooltip.png) |
+| Hotbar close-up | Inventory detail |
+|-----------------|------------------|
+| ![Hotbar close-up with hearts, XP bar and the Wi-Fi battery widget](media/screenshot-hotbar.png) | ![Inventory detail with craft row, app suggestions and Obsidian tooltip](media/screenshot-inventory-detail.png) |
 
-![Inventory detail with armor progress and fun fact](media/screenshot-inventory-detail.png)
+![Inventory Apps tab with pixel icons](media/screenshot-inventory-apps.png)
 
 ### Demo (66 s)
 
