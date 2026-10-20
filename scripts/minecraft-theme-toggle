@@ -121,10 +121,15 @@ if [ "$current" = "$THEME_NAME" ]; then
     exit 0
   fi
   omarchy-theme-set "$prev"
-  # Font is sticky (Monocraft stays after the first ON): restoring JBM costs
-  # ~5s + shell restart, which made every toggle ~8s. base-size still restores
-  # so type scale matches the previous theme. To get JBM back manually:
-  #   omarchy font set "JetBrainsMono Nerd Font"
+  # Restore the font too. Leaving Monocraft behind leaks the pixel font into
+  # every later theme (bar clock, menus, Qt apps), so the toggle must put the
+  # previous font back rather than leaving it "sticky".
+  prev_font=""
+  [ -f "$PREV_FONT_FILE" ] && prev_font=$(cat "$PREV_FONT_FILE")
+  if [ -z "$prev_font" ] || [ "$prev_font" = "$MINECRAFT_FONT" ]; then
+    prev_font="$DEFAULT_FONT"
+  fi
+  set_font "$prev_font"
   prev_base=""
   [ -f "$PREV_BASE_FILE" ] && prev_base=$(cat "$PREV_BASE_FILE")
   set_base_size "$prev_base"
@@ -142,7 +147,15 @@ else
   if [ -n "$current" ]; then
     echo "$current" >"$PREV_FILE"
   fi
-  echo "$(current_font)" >"$PREV_FONT_FILE"
+  # Save the font to restore on OFF, but never record Monocraft itself. If it
+  # is already active (an older install, or the user set it by hand), keep a
+  # real non-Minecraft font in the state file instead of poisoning the restore.
+  current_font_name="$(current_font)"
+  if [ -n "$current_font_name" ] && [ "$current_font_name" != "$MINECRAFT_FONT" ]; then
+    echo "$current_font_name" >"$PREV_FONT_FILE"
+  elif [ ! -s "$PREV_FONT_FILE" ] || [ "$(cat "$PREV_FONT_FILE")" = "$MINECRAFT_FONT" ]; then
+    echo "$DEFAULT_FONT" >"$PREV_FONT_FILE"
+  fi
   echo "$(get_base_size)" >"$PREV_BASE_FILE"
   set_base_size "$MINECRAFT_BASE_SIZE"
   omarchy-theme-set "$THEME_NAME"

@@ -149,7 +149,7 @@ fi
 # 6. Font (Monocraft) — warn if missing
 if ! fc-list | grep -qi monocraft; then
   echo "  !! Monocraft font not found. Install with:  yay -S ttf-monocraft-nerd"
-  echo "     then:  omarchy font set Monocraft"
+  echo "     The SUPER+M toggle applies it with the theme (and restores your previous font on exit)."
 fi
 
 echo ""

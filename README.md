@@ -39,7 +39,7 @@ https://github.com/user-attachments/assets/d87af3de-12f6-44c8-b4cd-ad515e60451c
 ## Requirements
 
 - [Omarchy](https://omarchy.org) (tested on 4.0.x / Hyprland 0.56 / Quickshell 0.3)
-- Monocraft Nerd Font: `yay -S ttf-monocraft-nerd` then `omarchy font set Monocraft`
+- Monocraft Nerd Font: `yay -S ttf-monocraft-nerd` (SUPER+M applies it with the theme and restores your previous font when you toggle off)
 - `jq`, `python3`, `pw-play` (WirePlumber) — ship with a normal Omarchy install
 
 ## Install

@@ -26,6 +26,18 @@ if [ "$current_name" = "$THEME_NAME" ]; then
   fi
 fi
 
+# Restore the font if Monocraft is still active. Older installs left it
+# "sticky", so their recorded previous font can itself be Monocraft; fall back
+# to Omarchy's default rather than leaving the pixel font behind.
+if [ "$(omarchy font current 2>/dev/null || true)" = "Monocraft" ]; then
+  prev_font=$(cat "$STATE_DIR/previous-font" 2>/dev/null || true)
+  case "$prev_font" in
+    "" | Monocraft) prev_font="JetBrainsMono Nerd Font" ;;
+  esac
+  echo "  -> restoring font: $prev_font"
+  omarchy font set "$prev_font" || true
+fi
+
 echo "  -> removing theme dir"
 rm -rf "$THEME_DIR"
 
